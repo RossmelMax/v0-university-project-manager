@@ -7,7 +7,8 @@ import { desc, sql } from "drizzle-orm"
 import { revalidatePath } from "next/cache"
 
 export async function getProjects() {
-  return db.select().from(thesisProjects).orderBy(desc(thesisProjects.createdAt))
+  const rows = await db.select().from(thesisProjects).orderBy(desc(thesisProjects.createdAt))
+  return rows
 }
 
 export async function createProject(input: {
