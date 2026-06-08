@@ -16,13 +16,12 @@ export default async function HomePage() {
       <SiteHeader />
 
       <section className="border-b border-border bg-sidebar text-sidebar-foreground">
-        <div className="mx-auto max-w-5xl px-4 py-10 sm:px-6 sm:py-14">
-          <h1 className="text-balance text-2xl font-bold leading-tight sm:text-4xl">
+        <div className="mx-auto max-w-5xl px-4 py-5 sm:px-6 sm:py-6">
+          <h1 className="text-balance text-lg font-bold leading-tight sm:text-xl">
             Repositorio de Proyectos de Grado
           </h1>
-          <p className="mt-3 max-w-2xl text-pretty text-base leading-relaxed text-sidebar-foreground/80 sm:text-lg">
-            Registra y busca proyectos de grado de Ingeniería en Sistemas,
-            Telecomunicaciones y Petrolera de la UDABOL.
+          <p className="mt-1 text-pretty text-sm leading-relaxed text-sidebar-foreground/80">
+            Ingeniería en Sistemas, Telecomunicaciones y Petrolera — UDABOL
           </p>
         </div>
       </section>

@@ -27,10 +27,6 @@ export default async function IngresarPage() {
             Ingresar a la plataforma
           </Button>
         </form>
-
-        <p className="mt-4 text-center text-sm leading-relaxed text-muted-foreground">
-          Acceso de demostración. No se requieren credenciales por ahora.
-        </p>
       </div>
 
       <p className="mt-8 text-center text-sm text-sidebar-foreground/70">
