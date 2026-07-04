@@ -151,6 +151,7 @@ export async function createProject(input: {
   try {
     await supabaseFetch(`/thesis_projects`, {
       method: "POST",
+      headers: { Prefer: "return=representation" },
       body: JSON.stringify({
         title,
         student_name: studentName,

@@ -5,6 +5,8 @@ create table if not exists thesis_projects (
   career text not null,
   year integer not null,
   abstract text not null default '',
+  pdf_url text,
+  user_id integer,
   advisor text default '',
   created_at timestamptz not null default now()
 );

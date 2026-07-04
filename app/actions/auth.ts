@@ -20,17 +20,32 @@ export async function getUserRole(): Promise<UserRole> {
 
 export async function login(formData: FormData | null = null) {
   const store = await cookies();
-  const role =
-    (formData?.get("role") as string | null) === "admin"
-      ? "admin"
-      : "anonymous";
-  store.set(SESSION_COOKIE, role, {
-    httpOnly: true,
-    sameSite: "lax",
-    path: "/",
-    maxAge: 60 * 60 * 24 * 7,
-  });
-  redirect("/");
+  const role = formData?.get("role") as string | null;
+
+  if (role === "admin") {
+    const email = formData?.get("email") as string | null;
+    const password = formData?.get("password") as string | null;
+
+    if (email !== "admin@udabol.edu.bo" || password !== "123456") {
+      return { error: "Credenciales incorrectas" };
+    }
+
+    store.set(SESSION_COOKIE, "admin", {
+      httpOnly: true,
+      sameSite: "lax",
+      path: "/",
+      maxAge: 60 * 60 * 24 * 7,
+    });
+    redirect("/");
+  } else {
+    store.set(SESSION_COOKIE, "anonymous", {
+      httpOnly: true,
+      sameSite: "lax",
+      path: "/",
+      maxAge: 60 * 60 * 24 * 7,
+    });
+    redirect("/");
+  }
 }
 
 export async function logout() {

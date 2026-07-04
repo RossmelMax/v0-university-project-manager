@@ -32,14 +32,12 @@ export async function extractPdfData(file: File): Promise<PdfExtraction> {
   }
 
   // dynamic import of the build file that exists in the installed package
-  const pdfjsLib: any = await import("pdfjs-dist/build/pdf");
+  const pdfjsLib: any = await import("pdfjs-dist/build/pdf.mjs");
 
-  // Set workerSrc to a CDN-hosted worker (version pinned to installed package).
-  // Adjust the version if you upgrade `pdfjs-dist` in package.json.
+  // Set workerSrc to a local worker file copied to the public folder.
   try {
     // @ts-ignore
-    pdfjsLib.GlobalWorkerOptions.workerSrc =
-      "https://unpkg.com/pdfjs-dist@6.1.200/build/pdf.worker.min.js";
+    pdfjsLib.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
   } catch (e) {
     // ignore if setting workerSrc fails
     // eslint-disable-next-line no-console
@@ -51,7 +49,9 @@ export async function extractPdfData(file: File): Promise<PdfExtraction> {
   const pdf = await loadingTask.promise;
 
   let text = "";
-  for (let index = 1; index <= pdf.numPages; index += 1) {
+  // Only process first 15 pages for metadata to avoid performance issues
+  const maxPages = Math.min(pdf.numPages, 15);
+  for (let index = 1; index <= maxPages; index += 1) {
     const page = await pdf.getPage(index);
     const content = await page.getTextContent();
     const pageText = content.items
@@ -61,21 +61,43 @@ export async function extractPdfData(file: File): Promise<PdfExtraction> {
   }
 
   const normalizedText = normalizeText(text);
-  const titleMatch = normalizedText.match(
-    /(?:titulo|title|proyecto)\s*[:\-]\s*([A-ZÁÉÍÓÚÑ0-9][^\n]{0,180})/i,
-  );
-  const studentMatch = normalizedText.match(
-    /(?:alumno|autor|student|author)\s*[:\-]\s*([A-ZÁÉÍÓÚÑ][^\n]{0,80})/i,
-  );
-  const abstractMatch = normalizedText.match(
-    /(?:resumen|abstract)\s*[:\-]\s*([A-ZÁÉÍÓÚÑ0-9][^\n]{0,800})/i,
-  );
+
+  try {
+    const response = await fetch("/api/extract-pdf-data", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text: normalizedText }),
+    });
+
+    if (response.ok) {
+      const data = await response.json();
+      return {
+        title: data.title || "",
+        studentName: data.studentName || "",
+        career: data.career || "",
+        year: data.year || "",
+        abstract: data.abstract || "",
+      };
+    }
+  } catch (error) {
+    console.warn("Fallo en extracción por IA, cayendo a heurística de regex", error);
+  }
+
+  const titleRegex = /(?:CARRERA DE [A-ZÁÉÍÓÚÑ\s]+?)\s+([A-ZÁÉÍÓÚÑ\s0-9,\.]{20,250}?)\s+(?:EXAMEN DE GRADO|PROYECTO DE GRADO|TESIS DE GRADO|TRABAJO DIRIGIDO|POSTULANTE|AUTOR)/i;
+  const titleMatchFallback = normalizedText.match(/(?:titulo|title|proyecto|tesis)\s*[:\-]\s*([A-ZÁÉÍÓÚÑ0-9][A-ZÁÉÍÓÚÑa-záéíóúñ\s0-9,\.]{10,180})/i);
+  const titleMatch = normalizedText.match(titleRegex) || titleMatchFallback;
+
+  const studentRegex = /(?:postulante|alumno|autor|student|author)\s*[:\-]?\s*([A-ZÁÉÍÓÚÑ][a-záéíóúñA-ZÁÉÍÓÚÑ\s]{5,80}?)(?=\s+(?:COCHABAMBA|LA PAZ|SANTA CRUZ|BOLIVIA|TUTOR|DOCENTE|202[0-9]|19[0-9]{2}))/i;
+  const studentMatch = normalizedText.match(studentRegex);
+
+  const abstractRegex = /(?:1\.1\s*RESUMEN|RESUMEN EJECUTIVO|RESUMEN|ABSTRACT)[\s\.\:]+(.*?)(?:1\.2\s*ANTECEDENTES|2\s*OBJETIVOS|INTRODUCCIÓN|ÍNDICE|CAPÍTULO)/i;
+  const abstractMatch = normalizedText.match(abstractRegex);
 
   return {
-    title: titleMatch?.[1]?.trim() ?? "",
-    studentName: studentMatch?.[1]?.trim() ?? "",
+    title: (titleMatch?.[1] || titleMatch?.[0] || "").trim(),
+    studentName: (studentMatch?.[1] || "").trim(),
     career: inferCareer(normalizedText),
     year: extractYear(normalizedText),
-    abstract: abstractMatch?.[1]?.trim() ?? "",
+    abstract: (abstractMatch?.[1] || "").trim(),
   };
 }

@@ -5,8 +5,8 @@ const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const SUPABASE_STORAGE_BUCKET = process.env.SUPABASE_STORAGE_BUCKET;
 
-function getCookieValue(name: string) {
-  const store = cookies();
+async function getCookieValue(name: string) {
+  const store = await cookies();
   return store.get(name)?.value;
 }
 
@@ -26,7 +26,8 @@ export async function POST(request: Request) {
     );
   }
 
-  if (getCookieValue("udabol_session") !== "admin") {
+  const role = await getCookieValue("udabol_session");
+  if (role !== "admin") {
     return NextResponse.json(
       { error: "Solo los administradores pueden subir PDFs." },
       { status: 403 },
@@ -44,9 +45,7 @@ export async function POST(request: Request) {
   }
 
   const path = buildStoragePath(file.name);
-  const bucketUrl = `${SUPABASE_URL.replace(/\/$/, "")}/storage/v1/object/${encodeURIComponent(
-    SUPABASE_STORAGE_BUCKET,
-  )}/${path}`;
+  const bucketUrl = `${SUPABASE_URL.replace(/\/$/, "")}/storage/v1/object/${SUPABASE_STORAGE_BUCKET}/${path}`;
 
   const arrayBuffer = await file.arrayBuffer();
   const res = await fetch(bucketUrl, {
@@ -69,9 +68,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const publicUrl = `${SUPABASE_URL.replace(/\/$/, "")}/storage/v1/object/public/${encodeURIComponent(
-    SUPABASE_STORAGE_BUCKET,
-  )}/${path}`;
+  const publicUrl = `${SUPABASE_URL.replace(/\/$/, "")}/storage/v1/object/public/${SUPABASE_STORAGE_BUCKET}/${path}`;
 
   return NextResponse.json({ ok: true, url: publicUrl });
 }

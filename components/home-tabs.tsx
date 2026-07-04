@@ -6,7 +6,7 @@ import { ProjectForm } from "@/components/project-form"
 import { AdminProjects } from "@/components/admin-projects"
 import { deleteProject, getProjects } from "@/app/actions/projects"
 import type { SearchResult } from "@/lib/projects"
-import { Search, FilePlus2, ShieldCheck } from "lucide-react"
+import { Search, FilePlus2, ShieldCheck, FolderGit2 } from "lucide-react"
 
 type Tab = "buscar" | "registrar" | "admin"
 
@@ -26,8 +26,8 @@ export function HomeTabs({ initial, role }: { initial: SearchResult[]; role: "an
   }
 
   return (
-    <div className="flex flex-col gap-6">
-      <div className="grid gap-2 rounded-xl bg-muted p-1.5" style={{ gridTemplateColumns: role === "admin" ? "repeat(3, minmax(0, 1fr))" : "repeat(2, minmax(0, 1fr))" }}>
+    <div className="flex flex-col gap-8">
+      <div className="grid gap-2 rounded-2xl bg-muted/50 p-2 border border-border/50" style={{ gridTemplateColumns: role === "admin" ? "repeat(3, minmax(0, 1fr))" : "repeat(1, minmax(0, 1fr))" }}>
         <TabButton active={tab === "buscar"} onClick={() => setTab("buscar")}>
           <Search className="size-4.5" aria-hidden="true" />
           Buscar proyectos
@@ -35,7 +35,7 @@ export function HomeTabs({ initial, role }: { initial: SearchResult[]; role: "an
         {role === "admin" ? (
           <>
             <TabButton active={tab === "admin"} onClick={() => setTab("admin")}>
-              <ShieldCheck className="size-4.5" aria-hidden="true" />
+              <FolderGit2 className="size-4.5" aria-hidden="true" />
               Administrar
             </TabButton>
             <TabButton active={tab === "registrar"} onClick={() => setTab("registrar")}>
@@ -46,32 +46,40 @@ export function HomeTabs({ initial, role }: { initial: SearchResult[]; role: "an
         ) : null}
       </div>
 
-      {tab === "buscar" ? (
-        <ProjectSearch initial={projects} />
-      ) : tab === "admin" ? (
-        <div className="rounded-xl border border-border bg-card p-5 shadow-sm sm:p-7">
-          <h2 className="mb-1 text-xl font-bold text-card-foreground">Gestión de proyectos</h2>
-          <p className="mb-6 text-sm leading-relaxed text-muted-foreground">
-            Usa esta vista para editar o eliminar proyectos y para administrar el repositorio.
-          </p>
-          <AdminProjects projects={projects} onDelete={handleDelete} onEdit={(project) => {
-            setEditingProject(project)
-            setTab("registrar")
-          }} />
-        </div>
-      ) : (
-        <div className="rounded-xl border border-border bg-card p-5 shadow-sm sm:p-7">
-          <h2 className="mb-1 text-xl font-bold text-card-foreground">{editingProject ? "Editar proyecto" : "Nuevo proyecto de grado"}</h2>
-          <p className="mb-6 text-sm leading-relaxed text-muted-foreground">
-            Sube un PDF primero, si quieres, y luego ajusta los datos antes de guardar.
-          </p>
-          <ProjectForm mode={editingProject ? "edit" : "create"} project={editingProject} onSuccess={async () => {
-            setEditingProject(null)
-            await refreshProjects()
-            setTab("buscar")
-          }} />
-        </div>
-      )}
+      <div className="animate-in fade-in slide-in-from-bottom-2 duration-500">
+        {tab === "buscar" ? (
+          <ProjectSearch initial={projects} />
+        ) : tab === "admin" ? (
+          <div className="rounded-2xl border border-border bg-card p-6 shadow-sm sm:p-8">
+            <h2 className="mb-2 text-2xl font-bold text-card-foreground flex items-center gap-2">
+              <ShieldCheck className="size-6 text-primary" />
+              Gestión de proyectos
+            </h2>
+            <p className="mb-8 text-sm leading-relaxed text-muted-foreground max-w-2xl">
+              Usa esta vista para editar o eliminar proyectos y para administrar el repositorio oficial.
+            </p>
+            <AdminProjects projects={projects} onDelete={handleDelete} onEdit={(project) => {
+              setEditingProject(project)
+              setTab("registrar")
+            }} />
+          </div>
+        ) : (
+          <div className="rounded-2xl border border-border bg-card p-6 shadow-sm sm:p-8">
+            <h2 className="mb-2 text-2xl font-bold text-card-foreground flex items-center gap-2">
+              <FilePlus2 className="size-6 text-primary" />
+              {editingProject ? "Editar proyecto" : "Nuevo proyecto de grado"}
+            </h2>
+            <p className="mb-8 text-sm leading-relaxed text-muted-foreground max-w-2xl">
+              Sube un PDF primero, si quieres, y luego ajusta los datos antes de guardar. El sistema detectará automáticamente la información.
+            </p>
+            <ProjectForm mode={editingProject ? "edit" : "create"} project={editingProject} onSuccess={async () => {
+              setEditingProject(null)
+              await refreshProjects()
+              setTab("buscar")
+            }} />
+          </div>
+        )}
+      </div>
     </div>
   )
 }
@@ -90,9 +98,9 @@ function TabButton({
       type="button"
       onClick={onClick}
       aria-pressed={active}
-      className={`flex items-center justify-center gap-2 rounded-lg px-4 py-3 text-sm font-semibold transition-colors sm:text-base ${active
-        ? "bg-card text-primary shadow-sm"
-        : "text-muted-foreground hover:text-foreground"
+      className={`flex items-center justify-center gap-2.5 rounded-xl px-4 py-3.5 text-sm font-semibold transition-all sm:text-base ${active
+        ? "bg-card text-primary shadow-sm ring-1 ring-border/50 scale-[1.01]"
+        : "text-muted-foreground hover:text-foreground hover:bg-muted/80"
         }`}
     >
       {children}

@@ -1,10 +1,37 @@
-import { redirect } from "next/navigation"
-import { isLoggedIn, login } from "@/app/actions/auth"
-import { Button } from "@/components/ui/button"
-import { GraduationCap, LogIn, ShieldCheck } from "lucide-react"
+"use client"
 
-export default async function IngresarPage() {
-  if (await isLoggedIn()) redirect("/")
+import { useTransition, useState } from "react"
+import { login } from "@/app/actions/auth"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { GraduationCap, LogIn, ShieldCheck, AlertCircle } from "lucide-react"
+
+export default function IngresarPage() {
+  const [isPending, startTransition] = useTransition()
+  const [error, setError] = useState<string | null>(null)
+
+  function handleAnonymousLogin() {
+    startTransition(async () => {
+      const formData = new FormData()
+      formData.append("role", "anonymous")
+      await login(formData)
+    })
+  }
+
+  function handleAdminLogin(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    setError(null)
+    const formData = new FormData(e.currentTarget)
+    formData.append("role", "admin")
+
+    startTransition(async () => {
+      const res = await login(formData)
+      if (res?.error) {
+        setError(res.error)
+      }
+    })
+  }
 
   return (
     <main className="flex min-h-svh flex-col items-center justify-center bg-sidebar px-4 py-12">
@@ -21,16 +48,69 @@ export default async function IngresarPage() {
           </p>
         </div>
 
-        <form action={login} className="mt-8 flex flex-col gap-3">
-          <Button type="submit" name="role" value="anonymous" size="lg" className="h-14 w-full text-base font-semibold">
-            <LogIn className="size-5" aria-hidden="true" />
-            Ingresar como usuario anónimo
+        <div className="mt-8 flex flex-col gap-6">
+          <Button 
+            type="button" 
+            onClick={handleAnonymousLogin} 
+            disabled={isPending}
+            size="lg" 
+            className="h-14 w-full text-base font-semibold"
+          >
+            <LogIn className="size-5 mr-2" aria-hidden="true" />
+            Ingresar como invitado (búsqueda)
           </Button>
-          <Button type="submit" name="role" value="admin" size="lg" variant="secondary" className="h-14 w-full text-base font-semibold">
-            <ShieldCheck className="size-5" aria-hidden="true" />
-            Ingresar como administrador
-          </Button>
-        </form>
+
+          <div className="relative">
+            <div className="absolute inset-0 flex items-center">
+              <span className="w-full border-t border-border" />
+            </div>
+            <div className="relative flex justify-center text-xs uppercase">
+              <span className="bg-card px-2 text-muted-foreground">o ingreso administrativo</span>
+            </div>
+          </div>
+
+          <form onSubmit={handleAdminLogin} className="flex flex-col gap-4">
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="email">Correo electrónico</Label>
+              <Input 
+                id="email" 
+                name="email" 
+                type="email" 
+                placeholder="admin@udabol.edu.bo" 
+                required 
+                className="h-12"
+              />
+            </div>
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="password">Contraseña</Label>
+              <Input 
+                id="password" 
+                name="password" 
+                type="password" 
+                required 
+                className="h-12"
+              />
+            </div>
+
+            {error && (
+              <div className="flex items-center gap-2 rounded-lg bg-destructive/10 px-4 py-3 text-sm font-medium text-destructive">
+                <AlertCircle className="size-5 shrink-0" aria-hidden="true" />
+                {error}
+              </div>
+            )}
+
+            <Button 
+              type="submit" 
+              disabled={isPending}
+              variant="secondary" 
+              size="lg" 
+              className="h-14 w-full text-base font-semibold"
+            >
+              <ShieldCheck className="size-5 mr-2" aria-hidden="true" />
+              Acceso Administrador
+            </Button>
+          </form>
+        </div>
       </div>
 
       <p className="mt-8 text-center text-sm text-sidebar-foreground/70">

@@ -15,7 +15,10 @@ type Props = {
 export function AdminProjects({ projects, onDelete, onEdit }: Props) {
     const [busyId, setBusyId] = useState<number | null>(null)
 
-    async function handleDelete(id: number) {
+    async function handleDelete(id: number, title: string) {
+        if (!window.confirm(`¿Estás seguro de que quieres eliminar el proyecto "${title}"? Esta acción no se puede deshacer.`)) {
+            return
+        }
         setBusyId(id)
         try {
             await onDelete(id)
@@ -43,7 +46,7 @@ export function AdminProjects({ projects, onDelete, onEdit }: Props) {
                                 <PencilLine className="mr-2 size-4" />
                                 Editar
                             </Button>
-                            <Button type="button" variant="destructive" size="sm" disabled={busyId === project.id} onClick={() => handleDelete(project.id)}>
+                            <Button type="button" variant="destructive" size="sm" disabled={busyId === project.id} onClick={() => handleDelete(project.id, project.title)}>
                                 <Trash2 className="mr-2 size-4" />
                                 Eliminar
                             </Button>
