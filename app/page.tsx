@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation"
-import { isLoggedIn } from "@/app/actions/auth"
+import { getUserRole, isLoggedIn } from "@/app/actions/auth"
 import { getProjects } from "@/app/actions/projects"
 import { SiteHeader } from "@/components/site-header"
 import { HomeTabs } from "@/components/home-tabs"
@@ -8,8 +8,10 @@ import type { SearchResult } from "@/lib/projects"
 export default async function HomePage() {
   if (!(await isLoggedIn())) redirect("/ingresar")
 
+  const role = await getUserRole()
   const rows = await getProjects()
   const initial: SearchResult[] = rows.map((r) => ({ ...r, score: 0 }))
+  const hasDatabase = Boolean(process.env.DATABASE_URL?.trim() || process.env.POSTGRES_URL?.trim())
 
   return (
     <div className="min-h-svh bg-background">
@@ -27,7 +29,13 @@ export default async function HomePage() {
       </section>
 
       <main className="mx-auto max-w-5xl px-4 py-8 sm:px-6 sm:py-10">
-        <HomeTabs initial={initial} />
+        {!hasDatabase && (
+          <div className="mb-6 rounded-xl border border-amber-300/60 bg-amber-50 p-4 text-sm text-amber-900">
+            La base de datos no está configurada en este entorno, así que la app está mostrando datos de respaldo.
+            Cuando conectes Supabase o PostgreSQL, define DATABASE_URL para habilitar guardado y búsquedas reales.
+          </div>
+        )}
+        <HomeTabs initial={initial} role={role} />
       </main>
 
       <footer className="border-t border-border py-6">

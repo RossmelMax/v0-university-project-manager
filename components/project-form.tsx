@@ -1,9 +1,9 @@
 "use client"
 
-import { useState, useTransition } from "react"
+import { useEffect, useState, useTransition, type FormEvent } from "react"
 import { useRouter } from "next/navigation"
-import { createProject } from "@/app/actions/projects"
-import { CARRERAS } from "@/lib/projects"
+import { createProject, updateProject } from "@/app/actions/projects"
+import { CARRERAS, type SearchResult } from "@/lib/projects"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -15,23 +15,73 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { CheckCircle2, AlertCircle, Plus } from "lucide-react"
+import { PdfUpload } from "@/components/pdf-upload"
+import { PdfComparisonDialog } from "@/components/pdf-comparison-dialog"
+import { CheckCircle2, AlertCircle, Plus, PencilLine } from "lucide-react"
 
 const CURRENT_YEAR = new Date().getFullYear()
 
-export function ProjectForm() {
+type ProjectFormProps = {
+  mode?: "create" | "edit"
+  project?: SearchResult | null
+  onSuccess?: () => void
+}
+
+export function ProjectForm({ mode = "create", project = null, onSuccess }: ProjectFormProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
+  const [title, setTitle] = useState("")
+  const [studentName, setStudentName] = useState("")
   const [career, setCareer] = useState("")
+  const [year, setYear] = useState(CURRENT_YEAR)
+  const [abstract, setAbstract] = useState("")
+  const [pdfUrl, setPdfUrl] = useState<string | null>(null)
   const [feedback, setFeedback] = useState<{ type: "ok" | "error"; text: string } | null>(null)
+  const [showComparison, setShowComparison] = useState(false)
+  const [extractedData, setExtractedData] = useState<{ title: string; studentName: string; career: string; year: string; abstract: string } | null>(null)
 
-  function handleSubmit(formData: FormData) {
+  useEffect(() => {
+    if (project) {
+      setTitle(project.title)
+      setStudentName(project.studentName)
+      setCareer(project.career)
+      setYear(project.year)
+      setAbstract(project.abstract)
+      setPdfUrl(project.pdfUrl ?? null)
+    } else {
+      setTitle("")
+      setStudentName("")
+      setCareer("")
+      setYear(CURRENT_YEAR)
+      setAbstract("")
+      setPdfUrl(null)
+    }
+  }, [project])
+
+  function handlePdfExtracted(data: { title: string; studentName: string; career: string; year: string; abstract: string }) {
+    setExtractedData(data)
+    setShowComparison(true)
+  }
+
+  function applyExtractedData() {
+    if (!extractedData) return
+    if (extractedData.title) setTitle(extractedData.title)
+    if (extractedData.studentName) setStudentName(extractedData.studentName)
+    if (extractedData.career) setCareer(extractedData.career)
+    if (extractedData.year) setYear(Number(extractedData.year))
+    if (extractedData.abstract) setAbstract(extractedData.abstract)
+    setShowComparison(false)
+    setFeedback({ type: "ok", text: "Se aplicaron los datos detectados del PDF." })
+  }
+
+  function keepCurrentData() {
+    setShowComparison(false)
+    setFeedback({ type: "ok", text: "Se conservaron los datos actuales del formulario." })
+  }
+
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
     setFeedback(null)
-    const title = String(formData.get("title") ?? "")
-    const studentName = String(formData.get("studentName") ?? "")
-    const year = Number(formData.get("year") ?? 0)
-    const abstract = String(formData.get("abstract") ?? "")
-    const advisor = String(formData.get("advisor") ?? "")
 
     if (!career) {
       setFeedback({ type: "error", text: "Por favor selecciona una carrera." })
@@ -39,13 +89,23 @@ export function ProjectForm() {
     }
 
     startTransition(async () => {
-      const res = await createProject({ title, studentName, career, year, abstract, advisor })
+      const payload = { title, studentName, career, year, abstract, pdfUrl }
+      const res = mode === "edit" && project
+        ? await updateProject(project.id, payload)
+        : await createProject(payload)
+
       if (res.ok) {
-        setFeedback({ type: "ok", text: "Proyecto registrado correctamente." })
-        setCareer("")
-        const formEl = document.getElementById("project-form") as HTMLFormElement | null
-        formEl?.reset()
+        setFeedback({ type: "ok", text: mode === "edit" ? "Proyecto actualizado correctamente." : "Proyecto registrado correctamente." })
+        if (mode !== "edit") {
+          setTitle("")
+          setStudentName("")
+          setCareer("")
+          setYear(CURRENT_YEAR)
+          setAbstract("")
+          setPdfUrl(null)
+        }
         router.refresh()
+        onSuccess?.()
       } else {
         setFeedback({ type: "error", text: res.error })
       }
@@ -53,118 +113,124 @@ export function ProjectForm() {
   }
 
   return (
-    <form id="project-form" action={handleSubmit} className="flex flex-col gap-5">
-      <div className="flex flex-col gap-2">
-        <Label htmlFor="title" className="text-sm font-semibold">
-          Título del proyecto <span className="text-destructive">*</span>
-        </Label>
-        <Input
-          id="title"
-          name="title"
-          required
-          placeholder="Ej. Sistema de gestión de inventarios con IA"
-          className="h-12 text-base"
-        />
-      </div>
+    <>
+      <PdfComparisonDialog
+        open={showComparison}
+        current={{ title, studentName, career, year, abstract }}
+        extracted={extractedData ?? { title: "", studentName: "", career: "", year: "", abstract: "" }}
+        onUseExtracted={applyExtractedData}
+        onKeepCurrent={keepCurrentData}
+      />
+      <form onSubmit={handleSubmit} className="flex flex-col gap-5">
+        <PdfUpload onExtracted={handlePdfExtracted} onUploadComplete={setPdfUrl} existingPdfUrl={pdfUrl} />
 
-      <div className="grid gap-5 sm:grid-cols-2">
         <div className="flex flex-col gap-2">
-          <Label htmlFor="studentName" className="text-sm font-semibold">
-            Nombre del alumno <span className="text-destructive">*</span>
+          <Label htmlFor="title" className="text-sm font-semibold">
+            Título del proyecto <span className="text-destructive">*</span>
           </Label>
           <Input
-            id="studentName"
-            name="studentName"
+            id="title"
+            name="title"
             required
-            placeholder="Ej. María Fernanda Quiroga"
+            value={title}
+            onChange={(event) => setTitle(event.target.value)}
+            placeholder="Ej. Sistema de gestión de inventarios con IA"
             className="h-12 text-base"
           />
         </div>
 
+        <div className="grid gap-5 sm:grid-cols-2">
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="studentName" className="text-sm font-semibold">
+              Nombre del alumno <span className="text-destructive">*</span>
+            </Label>
+            <Input
+              id="studentName"
+              name="studentName"
+              required
+              value={studentName}
+              onChange={(event) => setStudentName(event.target.value)}
+              placeholder="Ej. María Fernanda Quiroga"
+              className="h-12 text-base"
+            />
+          </div>
+
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="year" className="text-sm font-semibold">
+              Año <span className="text-destructive">*</span>
+            </Label>
+            <Input
+              id="year"
+              name="year"
+              type="number"
+              required
+              min={1980}
+              max={2100}
+              value={year}
+              onChange={(event) => setYear(Number(event.target.value))}
+              className="h-12 text-base"
+            />
+          </div>
+        </div>
+
+        <div className="grid gap-5 sm:grid-cols-2">
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="career" className="text-sm font-semibold">
+              Carrera <span className="text-destructive">*</span>
+            </Label>
+            <Select value={career} onValueChange={setCareer}>
+              <SelectTrigger id="career" className="h-12 text-base">
+                <SelectValue placeholder="Selecciona una carrera" />
+              </SelectTrigger>
+              <SelectContent>
+                {CARRERAS.map((c) => (
+                  <SelectItem key={c} value={c} className="text-base">
+                    {c}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
         <div className="flex flex-col gap-2">
-          <Label htmlFor="advisor" className="text-sm font-semibold">
-            Tutor / Asesor
+          <Label htmlFor="abstract" className="text-sm font-semibold">
+            Resumen
           </Label>
-          <Input
-            id="advisor"
-            name="advisor"
-            placeholder="Ej. Ing. Roberto Mendoza"
-            className="h-12 text-base"
+          <Textarea
+            id="abstract"
+            name="abstract"
+            rows={5}
+            value={abstract}
+            onChange={(event) => setAbstract(event.target.value)}
+            placeholder="Describe brevemente el objetivo y alcance del proyecto de grado..."
+            className="resize-y text-base leading-relaxed"
           />
         </div>
-      </div>
 
-      <div className="grid gap-5 sm:grid-cols-2">
-        <div className="flex flex-col gap-2">
-          <Label htmlFor="career" className="text-sm font-semibold">
-            Carrera <span className="text-destructive">*</span>
-          </Label>
-          <Select value={career} onValueChange={setCareer}>
-            <SelectTrigger id="career" className="h-12 text-base data-[size]:h-12">
-              <SelectValue placeholder="Selecciona una carrera" />
-            </SelectTrigger>
-            <SelectContent>
-              {CARRERAS.map((c) => (
-                <SelectItem key={c} value={c} className="text-base">
-                  {c}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+        {feedback && (
+          <div
+            role="status"
+            className={
+              feedback.type === "ok"
+                ? "flex items-center gap-2 rounded-lg bg-secondary px-4 py-3 text-sm font-medium text-secondary-foreground"
+                : "flex items-center gap-2 rounded-lg bg-destructive/10 px-4 py-3 text-sm font-medium text-destructive"
+            }
+          >
+            {feedback.type === "ok" ? (
+              <CheckCircle2 className="size-5 shrink-0" aria-hidden="true" />
+            ) : (
+              <AlertCircle className="size-5 shrink-0" aria-hidden="true" />
+            )}
+            {feedback.text}
+          </div>
+        )}
 
-        <div className="flex flex-col gap-2">
-          <Label htmlFor="year" className="text-sm font-semibold">
-            Año <span className="text-destructive">*</span>
-          </Label>
-          <Input
-            id="year"
-            name="year"
-            type="number"
-            required
-            min={1980}
-            max={2100}
-            defaultValue={CURRENT_YEAR}
-            className="h-12 text-base"
-          />
-        </div>
-      </div>
-
-      <div className="flex flex-col gap-2">
-        <Label htmlFor="abstract" className="text-sm font-semibold">
-          Resumen
-        </Label>
-        <Textarea
-          id="abstract"
-          name="abstract"
-          rows={5}
-          placeholder="Describe brevemente el objetivo y alcance del proyecto de grado..."
-          className="resize-y text-base leading-relaxed"
-        />
-      </div>
-
-      {feedback && (
-        <div
-          role="status"
-          className={
-            feedback.type === "ok"
-              ? "flex items-center gap-2 rounded-lg bg-secondary px-4 py-3 text-sm font-medium text-secondary-foreground"
-              : "flex items-center gap-2 rounded-lg bg-destructive/10 px-4 py-3 text-sm font-medium text-destructive"
-          }
-        >
-          {feedback.type === "ok" ? (
-            <CheckCircle2 className="size-5 shrink-0" aria-hidden="true" />
-          ) : (
-            <AlertCircle className="size-5 shrink-0" aria-hidden="true" />
-          )}
-          {feedback.text}
-        </div>
-      )}
-
-      <Button type="submit" size="lg" disabled={isPending} className="h-13 text-base font-semibold">
-        <Plus className="size-5" aria-hidden="true" />
-        {isPending ? "Registrando..." : "Registrar proyecto"}
-      </Button>
-    </form>
+        <Button type="submit" size="lg" disabled={isPending} className="h-13 text-base font-semibold">
+          {mode === "edit" ? <PencilLine className="mr-2 size-5" aria-hidden="true" /> : <Plus className="mr-2 size-5" aria-hidden="true" />}
+          {isPending ? (mode === "edit" ? "Actualizando..." : "Registrando...") : mode === "edit" ? "Actualizar proyecto" : "Registrar proyecto"}
+        </Button>
+      </form>
+    </>
   )
 }

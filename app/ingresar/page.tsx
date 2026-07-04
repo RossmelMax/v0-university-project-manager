@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation"
 import { isLoggedIn, login } from "@/app/actions/auth"
 import { Button } from "@/components/ui/button"
-import { GraduationCap, LogIn } from "lucide-react"
+import { GraduationCap, LogIn, ShieldCheck } from "lucide-react"
 
 export default async function IngresarPage() {
   if (await isLoggedIn()) redirect("/")
@@ -21,10 +21,14 @@ export default async function IngresarPage() {
           </p>
         </div>
 
-        <form action={login} className="mt-8">
-          <Button type="submit" size="lg" className="h-14 w-full text-base font-semibold">
+        <form action={login} className="mt-8 flex flex-col gap-3">
+          <Button type="submit" name="role" value="anonymous" size="lg" className="h-14 w-full text-base font-semibold">
             <LogIn className="size-5" aria-hidden="true" />
-            Ingresar a la plataforma
+            Ingresar como usuario anónimo
+          </Button>
+          <Button type="submit" name="role" value="admin" size="lg" variant="secondary" className="h-14 w-full text-base font-semibold">
+            <ShieldCheck className="size-5" aria-hidden="true" />
+            Ingresar como administrador
           </Button>
         </form>
       </div>

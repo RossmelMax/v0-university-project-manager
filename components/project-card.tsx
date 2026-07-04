@@ -40,7 +40,6 @@ export function ProjectCard({ project }: { project: SearchResult }) {
           <User className="size-4" aria-hidden="true" />
           {project.studentName}
         </span>
-        {project.advisor && <span>Tutor: {project.advisor}</span>}
       </div>
     </article>
   )
