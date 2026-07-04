@@ -11,6 +11,6 @@ export type SearchResult = {
   career: string
   year: number
   abstract: string
-  advisor: string | null
   score: number
+  userId?: number
 }

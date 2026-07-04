@@ -1,51 +1,18 @@
 "use server"
 
 import { db } from "@/lib/db"
-import { thesisProjects, type NewThesisProject } from "@/lib/db/schema"
+import { thesisProjects, projectPdfs } from "@/lib/db/schema"
 import { CARRERAS, type SearchResult } from "@/lib/projects"
-import { desc, sql } from "drizzle-orm"
+import { getCurrentUser } from "./auth"
+import { desc, sql, eq } from "drizzle-orm"
 import { revalidatePath } from "next/cache"
+import { put } from "@vercel/blob"
 
 export async function getProjects() {
   const rows = await db.select().from(thesisProjects).orderBy(desc(thesisProjects.createdAt))
   return rows
 }
 
-export async function createProject(input: {
-  title: string
-  studentName: string
-  career: string
-  year: number
-  abstract: string
-  advisor?: string
-}) {
-  const title = input.title.trim()
-  const studentName = input.studentName.trim()
-  const career = input.career.trim()
-  const abstract = input.abstract.trim()
-  const advisor = (input.advisor ?? "").trim()
-
-  if (!title || !studentName || !career) {
-    return { ok: false as const, error: "El título, el nombre del alumno y la carrera son obligatorios." }
-  }
-  if (!CARRERAS.includes(career as (typeof CARRERAS)[number])) {
-    return { ok: false as const, error: "La carrera seleccionada no es válida." }
-  }
-  if (!Number.isInteger(input.year) || input.year < 1980 || input.year > 2100) {
-    return { ok: false as const, error: "El año no es válido." }
-  }
-
-  const newProject: NewThesisProject = { title, studentName, career, year: input.year, abstract, advisor }
-  await db.insert(thesisProjects).values(newProject)
-  revalidatePath("/")
-  return { ok: true as const }
-}
-
-/**
- * Búsqueda "semántica" simple basada en similitud de texto (pg_trgm).
- * Combina la similitud del título, resumen, alumno y carrera para encontrar
- * proyectos parecidos aunque haya errores de tipeo o palabras incompletas.
- */
 export async function searchProjects(query: string): Promise<SearchResult[]> {
   const q = query.trim()
   if (!q) {
@@ -62,7 +29,6 @@ export async function searchProjects(query: string): Promise<SearchResult[]> {
       career,
       year,
       abstract,
-      advisor,
       GREATEST(
         word_similarity(${q}, title),
         word_similarity(${q}, abstract),
@@ -90,7 +56,158 @@ export async function searchProjects(query: string): Promise<SearchResult[]> {
     career: String(r.career),
     year: Number(r.year),
     abstract: String(r.abstract ?? ""),
-    advisor: r.advisor ? String(r.advisor) : null,
     score: Number(r.score ?? 0),
   }))
+}
+
+export async function createProject(data: {
+  title: string
+  studentName: string
+  career: string
+  year: number
+  abstract: string
+  pdfUrl?: string
+}) {
+  const user = await getCurrentUser()
+  if (!user) throw new Error("No autorizado")
+
+  const title = data.title.trim()
+  const studentName = data.studentName.trim()
+  const career = data.career.trim()
+  const abstract = data.abstract.trim()
+
+  if (!title || !studentName || !career) {
+    throw new Error("El título, el nombre del alumno y la carrera son obligatorios.")
+  }
+  if (!CARRERAS.includes(career as (typeof CARRERAS)[number])) {
+    throw new Error("La carrera seleccionada no es válida.")
+  }
+  if (!Number.isInteger(data.year) || data.year < 1980 || data.year > 2100) {
+    throw new Error("El año no es válido.")
+  }
+
+  const result = await db
+    .insert(thesisProjects)
+    .values({
+      title,
+      studentName,
+      career,
+      year: data.year,
+      abstract,
+      userId: user.id,
+    })
+    .returning({ id: thesisProjects.id })
+
+  if (result.length > 0 && data.pdfUrl) {
+    await db.insert(projectPdfs).values({
+      projectId: result[0].id,
+      pdfUrl: data.pdfUrl,
+    })
+  }
+
+  revalidatePath("/")
+  return result[0]
+}
+
+export async function updateProject(
+  projectId: number,
+  data: {
+    title: string
+    studentName: string
+    career: string
+    year: number
+    abstract: string
+    pdfUrl?: string
+  }
+) {
+  const user = await getCurrentUser()
+  if (!user) throw new Error("No autorizado")
+
+  // Verificar que el usuario es el propietario
+  const project = await db.query.thesisProjects.findFirst({
+    where: eq(thesisProjects.id, projectId),
+  })
+
+  if (!project || (user.role === "admin" && project.userId !== user.id)) {
+    throw new Error("No tienes permisos para editar este proyecto")
+  }
+
+  const title = data.title.trim()
+  const studentName = data.studentName.trim()
+  const career = data.career.trim()
+  const abstract = data.abstract.trim()
+
+  if (!title || !studentName || !career) {
+    throw new Error("El título, el nombre del alumno y la carrera son obligatorios.")
+  }
+
+  await db
+    .update(thesisProjects)
+    .set({
+      title,
+      studentName,
+      career,
+      year: data.year,
+      abstract,
+    })
+    .where(eq(thesisProjects.id, projectId))
+
+  if (data.pdfUrl) {
+    // Eliminar PDF anterior si existe
+    await db.delete(projectPdfs).where(eq(projectPdfs.projectId, projectId))
+
+    // Agregar nuevo PDF
+    await db.insert(projectPdfs).values({
+      projectId,
+      pdfUrl: data.pdfUrl,
+    })
+  }
+
+  revalidatePath("/")
+}
+
+export async function deleteProject(projectId: number) {
+  const user = await getCurrentUser()
+  if (!user) throw new Error("No autorizado")
+
+  // Verificar que el usuario es el propietario
+  const project = await db.query.thesisProjects.findFirst({
+    where: eq(thesisProjects.id, projectId),
+  })
+
+  if (!project || (user.role === "admin" && project.userId !== user.id)) {
+    throw new Error("No tienes permisos para eliminar este proyecto")
+  }
+
+  // Eliminar PDFs asociados
+  await db.delete(projectPdfs).where(eq(projectPdfs.projectId, projectId))
+
+  // Eliminar proyecto
+  await db.delete(thesisProjects).where(eq(thesisProjects.id, projectId))
+
+  revalidatePath("/")
+}
+
+export async function getAdminProjects() {
+  const user = await getCurrentUser()
+  if (!user || user.role !== "admin") {
+    throw new Error("Solo administradores pueden acceder")
+  }
+
+  return db.query.thesisProjects.findMany({
+    where: eq(thesisProjects.userId, user.id),
+    orderBy: [desc(thesisProjects.createdAt)],
+  })
+}
+
+export async function uploadPdfToBlob(file: File): Promise<string> {
+  const buffer = await file.arrayBuffer()
+  const timestamp = Date.now()
+  const fileName = `projects/${timestamp}-${file.name}`
+
+  const blob = await put(fileName, buffer, {
+    access: "public",
+  })
+
+  return blob.url
 }
