@@ -45,6 +45,7 @@ export function ProjectForm({
 }: ProjectFormProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
+  const [pdfLoading, setPdfLoading] = useState(false);
   const [title, setTitle] = useState("");
   const [studentName, setStudentName] = useState("");
   const [career, setCareer] = useState("");
@@ -204,6 +205,7 @@ export function ProjectForm({
           onExtracted={handlePdfExtracted}
           onUploadComplete={setPdfUrl}
           existingPdfUrl={pdfUrl}
+          onLoadingChange={setPdfLoading}
         />
 
         <div className="flex flex-col gap-2">
@@ -368,7 +370,7 @@ export function ProjectForm({
         <Button
           type="submit"
           size="lg"
-          disabled={isPending}
+          disabled={isPending || pdfLoading}
           className="h-13 text-base font-semibold"
         >
           {mode === "edit" ? (

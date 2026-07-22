@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ChangeEvent } from "react";
+import { useState, useEffect, type ChangeEvent } from "react";
 import { Label } from "@/components/ui/label";
 import { extractPdfData } from "@/lib/pdf";
 import { FileText, Loader2, Upload, CheckCircle2 } from "lucide-react";
@@ -19,14 +19,18 @@ type Props = {
   onExtracted: (data: ExtractedPdfData) => void;
   onUploadComplete: (url: string) => void;
   existingPdfUrl?: string | null;
+  onLoadingChange?: (loading: boolean) => void;
 };
 
 export function PdfUpload({
   onExtracted,
   onUploadComplete,
   existingPdfUrl = null,
+  onLoadingChange,
 }: Props) {
   const [isLoading, setIsLoading] = useState(false);
+
+  useEffect(() => { onLoadingChange?.(isLoading); }, [isLoading, onLoadingChange]);
   const [error, setError] = useState<string | null>(null);
 
   async function handleChange(event: ChangeEvent<HTMLInputElement>) {

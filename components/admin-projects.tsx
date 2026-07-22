@@ -20,7 +20,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { CARRERAS, type SearchResult, type PdfVersion } from "@/lib/projects";
-import { ProjectHistoryList } from "@/components/project-history";
+import { ProjectHistoryList } from "@/components/project-history"
+import { PdfViewerDialog } from "@/components/pdf-viewer-dialog";
 import { getPdfHistory } from "@/app/actions/projects";
 
 type SortKey = "title" | "year" | "career" | "studentName";
@@ -36,6 +37,7 @@ export function AdminProjects({ projects, onDelete, onEdit }: Props) {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [historyProject, setHistoryProject] = useState<SearchResult | null>(null);
   const [pdfHistory, setPdfHistory] = useState<PdfVersion[]>([]);
+  const [viewVersionUrl, setViewVersionUrl] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [career, setCareer] = useState("");
   const [yearFrom, setYearFrom] = useState("");
@@ -298,15 +300,24 @@ export function AdminProjects({ projects, onDelete, onEdit }: Props) {
                         minute: "2-digit",
                       })}
                     </span>
+                    <div className="flex items-center gap-2 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => setViewVersionUrl(version.url)}
+                      className="text-sm font-medium text-primary hover:underline flex items-center gap-1 cursor-pointer"
+                    >
+                      <FileText className="size-3.5" />
+                      Ver PDF
+                    </button>
                     <a
                       href={"/api/pdf-proxy?url=" + encodeURIComponent(version.url)}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-sm font-medium text-primary hover:underline flex items-center gap-1 shrink-0"
+                      className="text-xs text-muted-foreground hover:text-foreground underline"
                     >
-                      <FileText className="size-3.5" />
                       Descargar
                     </a>
+                  </div>
                   </div>
                 ))}
               </div>
@@ -316,6 +327,13 @@ export function AdminProjects({ projects, onDelete, onEdit }: Props) {
           {historyProject && <ProjectHistoryList projectId={historyProject.id} />}
         </DialogContent>
       </Dialog>
+
+      <PdfViewerDialog
+        url={viewVersionUrl}
+        open={!!viewVersionUrl}
+        onOpenChange={(o) => !o && setViewVersionUrl(null)}
+        title="VERSION DE PDF"
+      />
     </div>
   );
 }
