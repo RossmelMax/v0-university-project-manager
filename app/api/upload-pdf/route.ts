@@ -18,7 +18,7 @@ async function savePdfVersion(projectId: string, oldUrl: string) {
         uploadedAt: new Date().toISOString(),
       });
   } catch (err) {
-    console.error("Error guardando versión anterior del PDF:", err);
+    console.error("Error guardando version anterior del PDF:", err);
   }
 }
 
@@ -28,10 +28,7 @@ export async function POST(request: Request) {
   const role = pipeIdx !== -1 ? rawCookie!.slice(pipeIdx + 1) : null;
 
   if (role !== "admin") {
-    return NextResponse.json(
-      { error: "Solo los administradores pueden subir PDFs." },
-      { status: 403 },
-    );
+    return NextResponse.json({ error: "Solo los administradores pueden subir PDFs." }, { status: 403 });
   }
 
   const formData = await request.formData();
@@ -39,13 +36,10 @@ export async function POST(request: Request) {
   const projectId = formData.get("projectId") as string | null;
 
   if (!(file instanceof File)) {
-    return NextResponse.json(
-      { error: "No se recibió un archivo PDF válido." },
-      { status: 400 },
-    );
+    return NextResponse.json({ error: "No se recibio un archivo PDF valido." }, { status: 400 });
   }
 
-  // Si hay projectId, guardar versión anterior del PDF antes de reemplazar
+  // Guardar version anterior si hay reemplazo
   if (projectId) {
     try {
       const doc = await adminDb.collection("projects").doc(projectId).get();
@@ -69,16 +63,14 @@ export async function POST(request: Request) {
   const buffer = Buffer.from(arrayBuffer);
 
   await fileRef.save(buffer, {
-    metadata: {
-      contentType: "application/pdf",
-      cacheControl: "public, max-age=31536000",
-    },
+    metadata: { contentType: "application/pdf", cacheControl: "public, max-age=31536000" },
   });
 
-  // Hacer el archivo público para que el visor de Google Docs pueda acceder
-  await fileRef.makePublic();
+  // Generar URL firmada valida 1 ano (no requiere makePublic)
+  const [signedUrl] = await fileRef.getSignedUrl({
+    action: "read",
+    expires: Date.now() + 365 * 24 * 60 * 60 * 1000,
+  });
 
-  const publicUrl = `https://storage.googleapis.com/${bucket.name}/${path}`;
-
-  return NextResponse.json({ ok: true, url: publicUrl, projectId });
+  return NextResponse.json({ ok: true, url: signedUrl, projectId });
 }

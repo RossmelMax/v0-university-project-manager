@@ -24,7 +24,8 @@ const CURRENT_YEAR = new Date().getFullYear();
 type ProjectFormProps = {
   mode?: "create" | "edit";
   project?: SearchResult | null;
-  onSuccess?: () => void;
+  onSuccess?: (destinationTab?: string) => void;
+  destinationTab?: string;
   initialData?: {
     title?: string;
     studentName?: string;
@@ -39,6 +40,7 @@ export function ProjectForm({
   mode = "create",
   project = null,
   onSuccess,
+  destinationTab,
   initialData = null,
 }: ProjectFormProps) {
   const router = useRouter();
@@ -169,7 +171,7 @@ export function ProjectForm({
           setPdfUrl(null);
         }
         router.refresh();
-        onSuccess?.();
+        onSuccess?.(destinationTab);
       } else {
         setFeedback({ type: "error", text: res.error || "Ocurrió un error." });
       }

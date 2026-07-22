@@ -113,7 +113,16 @@ export function HomeTabs({
             <p className="mb-8 text-sm leading-relaxed text-muted-foreground max-w-2xl">
               Sube un PDF primero, si quieres, y luego ajusta los datos antes de guardar.
             </p>
-            <ProjectForm mode={editingProject ? "edit" : "create"} project={editingProject} onSuccess={async () => { setEditingProject(null); await refreshProjects(); setTab("buscar"); }} />
+            <ProjectForm
+              mode={editingProject ? "edit" : "create"}
+              project={editingProject}
+              destinationTab={editingProject ? "admin" : "registrar"}
+              onSuccess={async (dest?: string) => {
+                setEditingProject(null);
+                await refreshProjects();
+                if (dest) setTab(dest as Tab);
+              }}
+            />
           </div>
         ) : (
           <div className="rounded-2xl border border-border bg-card p-6 shadow-sm sm:p-8">

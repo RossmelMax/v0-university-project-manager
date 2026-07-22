@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useTransition, useEffect } from "react"
+import { useState, useTransition, useEffect, useMemo } from "react"
 import { searchProjects } from "@/app/actions/projects"
 import { CARRERAS, type SearchResult } from "@/lib/projects"
 import { ProjectCard } from "@/components/project-card"
@@ -13,8 +13,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Search, Loader2, SearchX, X } from "lucide-react"
+import { Search, Loader2, SearchX, X, ArrowUpDown } from "lucide-react"
 import { PaginationControls } from "@/components/pagination-controls"
+
+type SortKey = "title" | "year" | "career" | "studentName"
+type SortDir = "asc" | "desc"
 
 export function ProjectSearch({ initial }: { initial: SearchResult[] }) {
   const [query, setQuery] = useState("")
@@ -27,6 +30,8 @@ export function ProjectSearch({ initial }: { initial: SearchResult[] }) {
   const [isPending, startTransition] = useTransition()
   const [pageSize, setPageSize] = useState(10)
   const [currentPage, setCurrentPage] = useState(1)
+  const [sortKey, setSortKey] = useState<SortKey>("year")
+  const [sortDir, setSortDir] = useState<SortDir>("desc")
 
   useEffect(() => {
     const handle = setTimeout(() => {
@@ -66,10 +71,25 @@ export function ProjectSearch({ initial }: { initial: SearchResult[] }) {
 
   const hasFilters = !!career || !!yearFrom || !!yearTo
 
+  // Ordenamiento
+  function toggleSort(key: SortKey) {
+    if (sortKey === key) setSortDir((d) => (d === "asc" ? "desc" : "asc"))
+    else { setSortKey(key); setSortDir("asc") }
+  }
+
+  const sortedResults = useMemo(() => {
+    return [...results].sort((a, b) => {
+      const aVal = String(a[sortKey] ?? "")
+      const bVal = String(b[sortKey] ?? "")
+      const cmp = aVal.localeCompare(bVal, "es")
+      return sortDir === "asc" ? cmp : -cmp
+    })
+  }, [results, sortKey, sortDir])
+
   // Paginación
-  const totalPages = Math.max(1, Math.ceil(results.length / pageSize))
+  const totalPages = Math.max(1, Math.ceil(sortedResults.length / pageSize))
   const safePage = Math.max(1, Math.min(currentPage, totalPages))
-  const paginatedResults = results.slice((safePage - 1) * pageSize, safePage * pageSize)
+  const paginatedResults = sortedResults.slice((safePage - 1) * pageSize, safePage * pageSize)
 
   return (
     <div className="flex flex-col gap-6">
@@ -133,15 +153,34 @@ export function ProjectSearch({ initial }: { initial: SearchResult[] }) {
 
       {yearError && <p className="text-xs text-destructive font-medium">{yearError}</p>}
 
+      {/* Sorters */}
+      <div className="flex gap-1 text-xs">
+        {(["title", "year", "career", "studentName"] as const).map((key) => (
+          <button
+            key={key}
+            type="button"
+            onClick={() => { toggleSort(key); setCurrentPage(1); }}
+            className={`flex items-center gap-1 rounded-md px-2.5 py-1.5 font-medium transition-colors ${
+              sortKey === key
+                ? "bg-primary/10 text-primary"
+                : "text-muted-foreground hover:text-foreground hover:bg-muted"
+            }`}
+          >
+            {key === "title" ? "Título" : key === "year" ? "Año" : key === "career" ? "Carrera" : "Alumno"}
+            {sortKey === key && <ArrowUpDown className="size-3" />}
+          </button>
+        ))}
+      </div>
+
       <div className="flex items-center justify-between gap-3">
         <p className="text-sm text-muted-foreground" aria-live="polite">
           {hasSearched
-            ? `${results.length} ${results.length === 1 ? "resultado" : "resultados"} encontrados`
-            : `${results.length} ${results.length === 1 ? "proyecto registrado" : "proyectos registrados"}`}
+            ? `${sortedResults.length} ${sortedResults.length === 1 ? "resultado" : "resultados"} encontrados`
+            : `${sortedResults.length} ${sortedResults.length === 1 ? "proyecto registrado" : "proyectos registrados"}`}
         </p>
       </div>
 
-      {results.length === 0 ? (
+      {sortedResults.length === 0 ? (
         <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed border-border bg-card/50 px-6 py-14 text-center">
           <SearchX className="size-10 text-muted-foreground" aria-hidden="true" />
           <p className="text-base font-medium text-foreground">No se encontraron proyectos</p>
@@ -155,7 +194,7 @@ export function ProjectSearch({ initial }: { initial: SearchResult[] }) {
           <PaginationControls
             pageSize={pageSize}
             currentPage={safePage}
-            totalItems={results.length}
+            totalItems={sortedResults.length}
             onPageSizeChange={(s) => { setPageSize(s); setCurrentPage(1); }}
             onPageChange={setCurrentPage}
           />

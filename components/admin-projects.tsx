@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -19,8 +19,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { CARRERAS, type SearchResult } from "@/lib/projects";
+import { CARRERAS, type SearchResult, type PdfVersion } from "@/lib/projects";
 import { ProjectHistoryList } from "@/components/project-history";
+import { getPdfHistory } from "@/app/actions/projects";
 
 type SortKey = "title" | "year" | "career" | "studentName";
 type SortDir = "asc" | "desc";
@@ -34,6 +35,7 @@ type Props = {
 export function AdminProjects({ projects, onDelete, onEdit }: Props) {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [historyProject, setHistoryProject] = useState<SearchResult | null>(null);
+  const [pdfHistory, setPdfHistory] = useState<PdfVersion[]>([]);
   const [search, setSearch] = useState("");
   const [career, setCareer] = useState("");
   const [yearFrom, setYearFrom] = useState("");
@@ -42,6 +44,15 @@ export function AdminProjects({ projects, onDelete, onEdit }: Props) {
   const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [pageSize, setPageSize] = useState(10);
   const [currentPage, setCurrentPage] = useState(1);
+
+  // Fetch PDF history when a project's history modal is opened
+  useEffect(() => {
+    if (historyProject) {
+      getPdfHistory(historyProject.id).then(setPdfHistory);
+    } else {
+      setPdfHistory([]);
+    }
+  }, [historyProject]);
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
@@ -263,6 +274,45 @@ export function AdminProjects({ projects, onDelete, onEdit }: Props) {
               </a>
             </div>
           )}
+
+          {/* PDF Version History */}
+          {pdfHistory.length > 0 && (
+            <section className="mt-6">
+              <h3 className="mb-3 flex items-center gap-2 text-base font-semibold text-foreground">
+                <History className="size-4" aria-hidden="true" />
+                Versiones del PDF
+              </h3>
+              <div className="rounded-lg border border-border divide-y divide-border">
+                {pdfHistory.map((version) => (
+                  <div
+                    key={version.id}
+                    className="flex items-center justify-between px-4 py-2.5"
+                  >
+                    <span className="text-sm text-foreground">
+                      Versión subida el{" "}
+                      {new Date(version.uploadedAt).toLocaleDateString("es-BO", {
+                        year: "numeric",
+                        month: "long",
+                        day: "numeric",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </span>
+                    <a
+                      href={version.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-sm font-medium text-primary hover:underline flex items-center gap-1 shrink-0"
+                    >
+                      <FileText className="size-3.5" />
+                      Descargar
+                    </a>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
+
           {historyProject && <ProjectHistoryList projectId={historyProject.id} />}
         </DialogContent>
       </Dialog>
