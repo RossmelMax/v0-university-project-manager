@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { Loader2, AlertTriangle, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Download } from "lucide-react";
 
 type Props = { url: string; title?: string };
@@ -8,31 +8,44 @@ type Props = { url: string; title?: string };
 export function PdfViewer({ url, title = "PDF" }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const pdfRef = useRef<any>(null);
+  const renderTaskRef = useRef<any>(null);
+  const wheelLockRef = useRef(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [pageCount, setPageCount] = useState(0);
   const [pageNum, setPageNum] = useState(1);
   const [scale, setScale] = useState(1);
 
-  // Renderiza la pagina actual con la escala actual
-  async function render() {
+  const render = useCallback(async () => {
     const pdf = pdfRef.current;
     const canvas = canvasRef.current;
     if (!pdf || !canvas) return;
+
+    // Cancelar render anterior si existe
+    if (renderTaskRef.current) {
+      try { renderTaskRef.current.cancel(); } catch {}
+      renderTaskRef.current = null;
+    }
+
     try {
       const page = await pdf.getPage(pageNum);
       const vp = page.getViewport({ scale });
       canvas.width = vp.width;
       canvas.height = vp.height;
       const ctx = canvas.getContext("2d");
-      if (ctx) {
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        await page.render({ canvasContext: ctx, viewport: vp }).promise;
+      if (!ctx) return;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      const task = page.render({ canvasContext: ctx, viewport: vp });
+      renderTaskRef.current = task;
+      await task.promise;
+      renderTaskRef.current = null;
+    } catch (e: any) {
+      if (e?.name !== "RenderingCancelledException") {
+        console.error("Render error:", e);
       }
-    } catch (e) {
-      console.error("Render error:", e);
     }
-  }
+  }, [pageNum, scale]);
 
   // Cargar PDF al montar
   useEffect(() => {
@@ -74,14 +87,19 @@ export function PdfViewer({ url, title = "PDF" }: Props) {
   // Render cuando cambia pagina o escala
   useEffect(() => {
     if (!loading && pdfRef.current) render();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pageNum, scale, loading]);
+  }, [pageNum, scale, loading, render]);
 
-  // Scroll vertical = cambiar pagina
+  // Scroll = cambiar pagina (con threshold y debounce)
   function handleWheel(e: React.WheelEvent) {
+    const now = Date.now();
+    if (now - wheelLockRef.current < 400) return; // debounce 400ms
+    if (Math.abs(e.deltaY) < 30) return; // threshold minimo
+
     if (e.deltaY > 0 && pageNum < pageCount) {
+      wheelLockRef.current = now;
       setPageNum(p => Math.min(pageCount, p + 1));
     } else if (e.deltaY < 0 && pageNum > 1) {
+      wheelLockRef.current = now;
       setPageNum(p => Math.max(1, p - 1));
     }
   }
@@ -140,7 +158,7 @@ export function PdfViewer({ url, title = "PDF" }: Props) {
         </div>
       </div>
 
-      {/* Scroll area + wheel para cambiar pagina */}
+      {/* Scroll area */}
       <div className="flex-1 overflow-auto bg-muted/10 flex justify-center p-4" onWheel={handleWheel}>
         {loading ? (
           <div className="flex items-center justify-center h-full min-h-[400px]">
