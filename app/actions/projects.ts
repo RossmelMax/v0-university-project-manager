@@ -12,7 +12,6 @@ import {
 import { adminDb } from "@/lib/firebase/admin";
 import { getUserRole } from "@/app/actions/auth";
 
-// Actualizamos los IDs de respaldo a strings
 const FALLBACK_PROJECTS: ThesisProject[] = [
   {
     id: "fallback-1",
@@ -43,17 +42,15 @@ async function ensureAdmin() {
   return role === "admin";
 }
 
-export async function getProjects(): Promise<ThesisProject[]> {
+export async function getProjects(includeDeleted: boolean = false): Promise<ThesisProject[]> {
   try {
     const snapshot = await adminDb
       .collection("projects")
       .orderBy("createdAt", "desc")
       .get();
 
-    // Ahora usamos QueryDocumentSnapshot tipado contra DocumentData
-    return snapshot.docs.map((doc: QueryDocumentSnapshot<ThesisProject>) => {
-      const data = doc.data();
-      // Construimos el objeto respetando ThesisProject estrictamente
+    const projects = snapshot.docs.map((doc: QueryDocumentSnapshot<ThesisProject>) => {
+      const data = doc.data() as Record<string, unknown>;
       return {
         id: doc.id,
         title: data.title as string,
@@ -64,17 +61,24 @@ export async function getProjects(): Promise<ThesisProject[]> {
         pdfUrl: data.pdfUrl as string | null | undefined,
         userId: data.userId as string | null | undefined,
         createdAt: data.createdAt as string,
+        deleted: data.deleted as boolean | undefined,
+        deletedAt: data.deletedAt as string | null | undefined,
       };
     });
+
+    if (!includeDeleted) {
+      return projects.filter((p) => !p.deleted);
+    }
+    return projects;
   } catch (err) {
     console.error("Error obteniendo proyectos de Firestore:", err);
-    return FALLBACK_PROJECTS;
+    return FALLBACK_PROJECTS as ThesisProject[];
   }
 }
 
 async function addHistoryLog(
   projectId: string,
-  action: "CREATE" | "UPDATE" | "DELETE" | "PDF_UPLOAD",
+  action: "CREATE" | "UPDATE" | "DELETE" | "RESTORE" | "PDF_UPLOAD",
   details: string,
 ) {
   try {
@@ -92,7 +96,6 @@ async function addHistoryLog(
       });
   } catch (err) {
     console.error("Error guardando el historial:", err);
-    // No lanzamos error para no bloquear la operación principal
   }
 }
 
@@ -141,17 +144,17 @@ export async function createProject(input: {
       pdfUrl: input.pdfUrl ?? null,
     };
 
-    // 1. Guardamos el proyecto
     const docRef = await adminDb.collection("projects").add({
       ...newProject,
       createdAt: new Date().toISOString(),
+      deleted: false,
+      deletedAt: null,
     });
 
-    // 2. Registramos el historial en la subcolección del nuevo ID
     await addHistoryLog(
       docRef.id,
       "CREATE",
-      `Proyecto creado en el sistema. Alumno: ${newProject.studentName}`,
+      "Proyecto creado. Alumno: " + newProject.studentName,
     );
 
     revalidatePath("/");
@@ -191,25 +194,22 @@ export async function updateProject(
       return { ok: false as const, error: "El proyecto no existe." };
     }
 
-    const oldData = oldDoc.data() as ThesisProject;
+    const oldData = oldDoc.data() as Record<string, unknown>;
     const changes: string[] = [];
 
-    // Hacemos un diff manual para saber qué cambió
-    if (oldData.title !== input.title) changes.push(`Título modificado`);
+    if (oldData.title !== input.title) changes.push("Título modificado");
     if (oldData.studentName !== input.studentName)
-      changes.push(`Autor modificado`);
+      changes.push("Autor modificado");
     if (oldData.abstract !== input.abstract)
-      changes.push(`Resumen actualizado`);
+      changes.push("Resumen actualizado");
     if (oldData.pdfUrl !== input.pdfUrl) {
-      changes.push(input.pdfUrl ? `PDF subido/actualizado` : `PDF eliminado`);
+      changes.push(input.pdfUrl ? "PDF subido/actualizado" : "PDF eliminado");
     }
 
-    // Si no hay cambios reales, no hacemos nada
     if (changes.length === 0) {
       return { ok: true as const };
     }
 
-    // 1. Actualizamos el documento
     await docRef.update({
       title: input.title,
       studentName: input.studentName,
@@ -219,10 +219,9 @@ export async function updateProject(
       pdfUrl: input.pdfUrl ?? null,
     });
 
-    // 2. Guardamos el registro con los detalles exactos
     const actionType =
       oldData.pdfUrl !== input.pdfUrl ? "PDF_UPLOAD" : "UPDATE";
-    await addHistoryLog(id, actionType, changes.join(", "));
+    await addHistoryLog(id, actionType as any, changes.join(", "));
 
     revalidatePath("/");
     return { ok: true as const };
@@ -264,38 +263,106 @@ export async function deleteProject(id: string) {
   }
 
   try {
-    // 1. Obtenemos todos los logs de la subcolección 'history'
+    await adminDb.collection("projects").doc(id).update({
+      deleted: true,
+      deletedAt: new Date().toISOString(),
+    });
+
+    await addHistoryLog(id, "DELETE" as any, "Proyecto eliminado (soft delete)");
+
+    revalidatePath("/");
+    return { ok: true as const };
+  } catch (err) {
+    console.error("Error al eliminar proyecto:", err);
+    return { ok: false as const, error: "No se pudo eliminar el proyecto." };
+  }
+}
+
+export async function permanentlyDeleteProject(id: string) {
+  if (!(await ensureAdmin())) {
+    return {
+      ok: false as const,
+      error: "Solo los administradores pueden eliminar proyectos permanentemente.",
+    };
+  }
+
+  try {
     const historySnapshot = await adminDb
       .collection("projects")
       .doc(id)
       .collection("history")
       .get();
 
-    // 2. Preparamos un "Batch" (lote de operaciones)
     const batch = adminDb.batch();
-
-    // Agregamos cada log a la lista de ejecución (para borrarlos)
-    historySnapshot.docs.forEach(
-      (doc: QueryDocumentSnapshot<ProjectHistoryLog>) => {
-        batch.delete(doc.ref);
-      },
-    );
-
-    // 3. Agregamos el documento principal del proyecto a la lista de ejecución
-    const projectRef = adminDb.collection("projects").doc(id);
-    batch.delete(projectRef);
-
-    // 4. Ejecutamos todo de un solo golpe
+    historySnapshot.docs.forEach((doc) => {
+      batch.delete(doc.ref);
+    });
+    batch.delete(adminDb.collection("projects").doc(id));
     await batch.commit();
 
     revalidatePath("/");
     return { ok: true as const };
   } catch (err) {
-    console.error(
-      "Error al eliminar proyecto y su historial en Firestore:",
-      err,
-    );
-    return { ok: false as const, error: "No se pudo eliminar el proyecto." };
+    console.error("Error al eliminar proyecto permanentemente:", err);
+    return { ok: false as const, error: "No se pudo eliminar permanentemente." };
+  }
+}
+
+export async function restoreProject(id: string) {
+  if (!(await ensureAdmin())) {
+    return {
+      ok: false as const,
+      error: "Solo los administradores pueden restaurar proyectos.",
+    };
+  }
+
+  try {
+    await adminDb.collection("projects").doc(id).update({
+      deleted: false,
+      deletedAt: null,
+    });
+
+    await addHistoryLog(id, "RESTORE" as any, "Proyecto restaurado");
+
+    revalidatePath("/");
+    return { ok: true as const };
+  } catch (err) {
+    console.error("Error al restaurar proyecto:", err);
+    return { ok: false as const, error: "No se pudo restaurar el proyecto." };
+  }
+}
+
+export async function getDeletedProjects(): Promise<ThesisProject[]> {
+  if (!(await ensureAdmin())) {
+    return [];
+  }
+
+  try {
+    const snapshot = await adminDb
+      .collection("projects")
+      .where("deleted", "==", true)
+      .orderBy("deletedAt", "desc")
+      .get();
+
+    return snapshot.docs.map((doc: QueryDocumentSnapshot<ThesisProject>) => {
+      const data = doc.data() as Record<string, unknown>;
+      return {
+        id: doc.id,
+        title: data.title as string,
+        studentName: data.studentName as string,
+        career: data.career as string,
+        year: data.year as number,
+        abstract: data.abstract as string,
+        pdfUrl: data.pdfUrl as string | null | undefined,
+        userId: data.userId as string | null | undefined,
+        createdAt: data.createdAt as string,
+        deleted: data.deleted as boolean | undefined,
+        deletedAt: data.deletedAt as string | null | undefined,
+      };
+    });
+  } catch (err) {
+    console.error("Error obteniendo proyectos eliminados:", err);
+    return [];
   }
 }
 
@@ -307,16 +374,14 @@ export async function searchProjects(query: string): Promise<SearchResult[]> {
     return allProjects.map((p) => ({ ...p, score: 0 }));
   }
 
-  // Calculamos el score de búsqueda en memoria
   const results = allProjects
     .map((project) => {
       let score = 0;
       const searchableText =
-        `${project.title} ${project.abstract} ${project.studentName} ${project.career}`.toLowerCase();
+        (project.title + " " + project.abstract + " " + project.studentName + " " + project.career).toLowerCase();
 
       if (searchableText.includes(q)) {
         score += 10;
-        // Puntos extra si coincide exactamente con el título o nombre
         if (project.title.toLowerCase().includes(q)) score += 5;
         if (project.studentName.toLowerCase().includes(q)) score += 5;
       }
@@ -328,3 +393,4 @@ export async function searchProjects(query: string): Promise<SearchResult[]> {
 
   return results;
 }
+

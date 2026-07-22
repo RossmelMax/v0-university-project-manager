@@ -18,6 +18,8 @@ export interface ThesisProject {
   pdfUrl?: string | null;
   userId?: string | null;
   createdAt: string;
+  deleted?: boolean;
+  deletedAt?: string | null;
 }
 
 // Tipo de utilidad para cuando vamos a insertar un proyecto nuevo
@@ -27,13 +29,13 @@ export type SearchResult = ThesisProject & {
   score?: number;
 };
 
-export type AuditActionType = "CREATE" | "UPDATE" | "DELETE" | "PDF_UPLOAD";
+export type AuditActionType = "CREATE" | "UPDATE" | "DELETE" | "RESTORE" | "PDF_UPLOAD";
 
 export interface ProjectHistoryLog {
   id: string;
   projectId: string;
   action: AuditActionType;
-  details: string; // Ej: "Se cambió el título de 'A' a 'B'"
+  details: string; // Ej: "Se cambió el título de A a B"
   timestamp: string;
   userRole: UserRole;
 }
