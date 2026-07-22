@@ -42,6 +42,13 @@ async function ensureAdmin() {
   return role === "admin";
 }
 
+export interface PaginatedResult<T> {
+  items: T[];
+  hasMore: boolean;
+}
+
+const PAGE_SIZE = 20;
+
 export async function getProjects(includeDeleted: boolean = false): Promise<ThesisProject[]> {
   try {
     const snapshot = await adminDb
@@ -73,6 +80,53 @@ export async function getProjects(includeDeleted: boolean = false): Promise<Thes
   } catch (err) {
     console.error("Error obteniendo proyectos de Firestore:", err);
     return FALLBACK_PROJECTS as ThesisProject[];
+  }
+}
+
+export async function getProjectsPaginated(
+  lastDocId?: string,
+  pageSize: number = PAGE_SIZE,
+  includeDeleted: boolean = false
+): Promise<PaginatedResult<ThesisProject>> {
+  try {
+    let query = adminDb
+      .collection("projects")
+      .orderBy("createdAt", "desc")
+      .limit(pageSize + 1);
+
+    if (lastDocId) {
+      const lastDoc = await adminDb.collection("projects").doc(lastDocId).get();
+      if (lastDoc.exists) {
+        query = query.startAfter(lastDoc);
+      }
+    }
+
+    const snapshot = await query.get();
+    const hasMore = snapshot.docs.length > pageSize;
+    const docs = hasMore ? snapshot.docs.slice(0, pageSize) : snapshot.docs;
+
+    const projects = docs.map((doc) => {
+      const data = doc.data() as Record<string, unknown>;
+      return {
+        id: doc.id,
+        title: data.title as string,
+        studentName: data.studentName as string,
+        career: data.career as string,
+        year: data.year as number,
+        abstract: data.abstract as string,
+        pdfUrl: data.pdfUrl as string | null | undefined,
+        userId: data.userId as string | null | undefined,
+        createdAt: data.createdAt as string,
+        deleted: data.deleted as boolean | undefined,
+        deletedAt: data.deletedAt as string | null | undefined,
+      };
+    });
+
+    const filtered = includeDeleted ? projects : projects.filter((p) => !p.deleted);
+    return { items: filtered, hasMore };
+  } catch (err) {
+    console.error("Error obteniendo proyectos paginados:", err);
+    return { items: FALLBACK_PROJECTS as ThesisProject[], hasMore: false };
   }
 }
 
@@ -393,4 +447,3 @@ export async function searchProjects(query: string): Promise<SearchResult[]> {
 
   return results;
 }
-
