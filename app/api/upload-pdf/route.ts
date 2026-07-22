@@ -26,8 +26,17 @@ export async function POST(request: Request) {
     );
   }
 
-  const role = await getCookieValue("udabol_session");
-  if (role !== "admin") {
+  // Obtenemos la cookie y la parseamos como JSON
+  const sessionCookie = await getCookieValue("udabol_session");
+  let session;
+  try {
+    session = sessionCookie ? JSON.parse(sessionCookie) : {};
+  } catch (e) {
+    session = {};
+  }
+
+  // Ahora comparamos la propiedad role extraída del objeto
+  if (session?.role !== "admin") {
     return NextResponse.json(
       { error: "Solo los administradores pueden subir PDFs." },
       { status: 403 },

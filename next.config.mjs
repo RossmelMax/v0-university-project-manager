@@ -6,6 +6,7 @@ const nextConfig = {
   images: {
     unoptimized: true,
   },
-}
+  serverExternalPackages: ["firebase-admin", "pdfjs-dist"],
+};
 
-export default nextConfig
+export default nextConfig;

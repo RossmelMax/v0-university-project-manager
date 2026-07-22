@@ -1,6 +1,6 @@
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
-import * as schema from "./schema";
+import * as schema from "./schema.delete";
 import dns from "dns/promises";
 
 const connectionString = process.env.DATABASE_URL ?? process.env.POSTGRES_URL;

@@ -1,115 +1,149 @@
-"use client"
+"use client";
 
-import { useEffect, useState, useTransition, type FormEvent } from "react"
-import { useRouter } from "next/navigation"
-import { createProject, updateProject } from "@/app/actions/projects"
-import { CARRERAS, type SearchResult } from "@/lib/projects"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
+import { useEffect, useState, useTransition, type FormEvent } from "react";
+import { useRouter } from "next/navigation";
+import { createProject, updateProject } from "@/app/actions/projects";
+import { CARRERAS, type SearchResult } from "@/lib/projects";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select"
-import { PdfUpload } from "@/components/pdf-upload"
-import { PdfComparisonDialog } from "@/components/pdf-comparison-dialog"
-import { CheckCircle2, AlertCircle, Plus, PencilLine } from "lucide-react"
+} from "@/components/ui/select";
+import { PdfUpload } from "@/components/pdf-upload";
+import { PdfComparisonDialog } from "@/components/pdf-comparison-dialog";
+import { CheckCircle2, AlertCircle, Plus, PencilLine } from "lucide-react";
 
-const CURRENT_YEAR = new Date().getFullYear()
+const CURRENT_YEAR = new Date().getFullYear();
 
 type ProjectFormProps = {
-  mode?: "create" | "edit"
-  project?: SearchResult | null
-  onSuccess?: () => void
-}
+  mode?: "create" | "edit";
+  project?: SearchResult | null;
+  onSuccess?: () => void;
+};
 
-export function ProjectForm({ mode = "create", project = null, onSuccess }: ProjectFormProps) {
-  const router = useRouter()
-  const [isPending, startTransition] = useTransition()
-  const [title, setTitle] = useState("")
-  const [studentName, setStudentName] = useState("")
-  const [career, setCareer] = useState("")
-  const [year, setYear] = useState(CURRENT_YEAR)
-  const [abstract, setAbstract] = useState("")
-  const [pdfUrl, setPdfUrl] = useState<string | null>(null)
-  const [feedback, setFeedback] = useState<{ type: "ok" | "error"; text: string } | null>(null)
-  const [showComparison, setShowComparison] = useState(false)
-  const [extractedData, setExtractedData] = useState<{ title: string; studentName: string; career: string; year: string; abstract: string } | null>(null)
+export function ProjectForm({
+  mode = "create",
+  project = null,
+  onSuccess,
+}: ProjectFormProps) {
+  const router = useRouter();
+  const [isPending, startTransition] = useTransition();
+  const [title, setTitle] = useState("");
+  const [studentName, setStudentName] = useState("");
+  const [career, setCareer] = useState("");
+  const [year, setYear] = useState(CURRENT_YEAR);
+  const [abstract, setAbstract] = useState("");
+  const [pdfUrl, setPdfUrl] = useState<string | null>(null);
+  const [feedback, setFeedback] = useState<{
+    type: "ok" | "error";
+    text: string;
+  } | null>(null);
+  const [showComparison, setShowComparison] = useState(false);
+  const [extractedData, setExtractedData] = useState<{
+    title: string;
+    studentName: string;
+    career: string;
+    year: string;
+    abstract: string;
+  } | null>(null);
 
   useEffect(() => {
     if (project) {
-      setTitle(project.title)
-      setStudentName(project.studentName)
-      setCareer(project.career)
-      setYear(project.year)
-      setAbstract(project.abstract)
-      setPdfUrl(project.pdfUrl ?? null)
+      setTitle(project.title);
+      setStudentName(project.studentName);
+      setCareer(project.career);
+      setYear(project.year);
+      setAbstract(project.abstract);
+      setPdfUrl(project.pdfUrl ?? null);
     } else {
-      setTitle("")
-      setStudentName("")
-      setCareer("")
-      setYear(CURRENT_YEAR)
-      setAbstract("")
-      setPdfUrl(null)
+      setTitle("");
+      setStudentName("");
+      setCareer("");
+      setYear(CURRENT_YEAR);
+      setAbstract("");
+      setPdfUrl(null);
     }
-  }, [project])
+  }, [project]);
 
-  function handlePdfExtracted(data: { title: string; studentName: string; career: string; year: string; abstract: string }) {
-    setExtractedData(data)
-    setShowComparison(true)
+  function handlePdfExtracted(data: {
+    title: string;
+    studentName: string;
+    career: string;
+    year: string;
+    abstract: string;
+  }) {
+    setExtractedData(data);
+    setShowComparison(true);
   }
 
   function applyExtractedData() {
-    if (!extractedData) return
-    if (extractedData.title) setTitle(extractedData.title)
-    if (extractedData.studentName) setStudentName(extractedData.studentName)
-    if (extractedData.career) setCareer(extractedData.career)
-    if (extractedData.year) setYear(Number(extractedData.year))
-    if (extractedData.abstract) setAbstract(extractedData.abstract)
-    setShowComparison(false)
-    setFeedback({ type: "ok", text: "Se aplicaron los datos detectados del PDF." })
+    if (!extractedData) return;
+    if (extractedData.title) setTitle(extractedData.title);
+    if (extractedData.studentName) setStudentName(extractedData.studentName);
+    if (extractedData.career) setCareer(extractedData.career);
+    if (extractedData.year) setYear(Number(extractedData.year));
+    if (extractedData.abstract) setAbstract(extractedData.abstract);
+    setShowComparison(false);
+    setFeedback({
+      type: "ok",
+      text: "Se aplicaron los datos detectados del PDF.",
+    });
   }
 
   function keepCurrentData() {
-    setShowComparison(false)
-    setFeedback({ type: "ok", text: "Se conservaron los datos actuales del formulario." })
+    setShowComparison(false);
+    setFeedback({
+      type: "ok",
+      text: "Se conservaron los datos actuales del formulario.",
+    });
   }
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    setFeedback(null)
+    event.preventDefault();
+    setFeedback(null);
 
     if (!career) {
-      setFeedback({ type: "error", text: "Por favor selecciona una carrera." })
-      return
+      setFeedback({ type: "error", text: "Por favor selecciona una carrera." });
+      return;
     }
 
     startTransition(async () => {
-      const payload = { title, studentName, career, year, abstract, pdfUrl }
-      const res = mode === "edit" && project
-        ? await updateProject(project.id, payload)
-        : await createProject(payload)
+      const payload = { title, studentName, career, year, abstract, pdfUrl };
+
+      // Aseguramos que si es modo edit, el ID se pase como string explícitamente
+      const res =
+        mode === "edit" && project
+          ? await updateProject(project.id as string, payload)
+          : await createProject(payload);
 
       if (res.ok) {
-        setFeedback({ type: "ok", text: mode === "edit" ? "Proyecto actualizado correctamente." : "Proyecto registrado correctamente." })
+        setFeedback({
+          type: "ok",
+          text:
+            mode === "edit"
+              ? "Proyecto actualizado correctamente."
+              : "Proyecto registrado correctamente.",
+        });
         if (mode !== "edit") {
-          setTitle("")
-          setStudentName("")
-          setCareer("")
-          setYear(CURRENT_YEAR)
-          setAbstract("")
-          setPdfUrl(null)
+          setTitle("");
+          setStudentName("");
+          setCareer("");
+          setYear(CURRENT_YEAR);
+          setAbstract("");
+          setPdfUrl(null);
         }
-        router.refresh()
-        onSuccess?.()
+        router.refresh();
+        onSuccess?.();
       } else {
-        setFeedback({ type: "error", text: res.error })
+        setFeedback({ type: "error", text: res.error || "Ocurrió un error." });
       }
-    })
+    });
   }
 
   return (
@@ -117,15 +151,33 @@ export function ProjectForm({ mode = "create", project = null, onSuccess }: Proj
       <PdfComparisonDialog
         open={showComparison}
         current={{ title, studentName, career, year, abstract }}
-        extracted={extractedData ?? { title: "", studentName: "", career: "", year: "", abstract: "" }}
+        extracted={
+          extractedData ?? {
+            title: "",
+            studentName: "",
+            career: "",
+            year: "",
+            abstract: "",
+          }
+        }
         onUseExtracted={applyExtractedData}
         onKeepCurrent={keepCurrentData}
       />
-      <form onSubmit={handleSubmit} className="flex flex-col gap-5">
-        <PdfUpload onExtracted={handlePdfExtracted} onUploadComplete={setPdfUrl} existingPdfUrl={pdfUrl} />
+      <form
+        onSubmit={handleSubmit}
+        className="flex flex-col gap-5"
+      >
+        <PdfUpload
+          onExtracted={handlePdfExtracted}
+          onUploadComplete={setPdfUrl}
+          existingPdfUrl={pdfUrl}
+        />
 
         <div className="flex flex-col gap-2">
-          <Label htmlFor="title" className="text-sm font-semibold">
+          <Label
+            htmlFor="title"
+            className="text-sm font-semibold"
+          >
             Título del proyecto <span className="text-destructive">*</span>
           </Label>
           <Input
@@ -141,7 +193,10 @@ export function ProjectForm({ mode = "create", project = null, onSuccess }: Proj
 
         <div className="grid gap-5 sm:grid-cols-2">
           <div className="flex flex-col gap-2">
-            <Label htmlFor="studentName" className="text-sm font-semibold">
+            <Label
+              htmlFor="studentName"
+              className="text-sm font-semibold"
+            >
               Nombre del alumno <span className="text-destructive">*</span>
             </Label>
             <Input
@@ -156,7 +211,10 @@ export function ProjectForm({ mode = "create", project = null, onSuccess }: Proj
           </div>
 
           <div className="flex flex-col gap-2">
-            <Label htmlFor="year" className="text-sm font-semibold">
+            <Label
+              htmlFor="year"
+              className="text-sm font-semibold"
+            >
               Año <span className="text-destructive">*</span>
             </Label>
             <Input
@@ -175,16 +233,33 @@ export function ProjectForm({ mode = "create", project = null, onSuccess }: Proj
 
         <div className="grid gap-5 sm:grid-cols-2">
           <div className="flex flex-col gap-2">
-            <Label htmlFor="career" className="text-sm font-semibold">
+            <Label
+              htmlFor="career"
+              className="text-sm font-semibold"
+            >
               Carrera <span className="text-destructive">*</span>
             </Label>
-            <Select value={career} onValueChange={setCareer}>
-              <SelectTrigger id="career" className="h-12 text-base">
+            <Select
+              value={career}
+              onValueChange={(val) => {
+                if (val !== null) {
+                  setCareer(val);
+                }
+              }}
+            >
+              <SelectTrigger
+                id="career"
+                className="h-12 text-base"
+              >
                 <SelectValue placeholder="Selecciona una carrera" />
               </SelectTrigger>
               <SelectContent>
                 {CARRERAS.map((c) => (
-                  <SelectItem key={c} value={c} className="text-base">
+                  <SelectItem
+                    key={c}
+                    value={c}
+                    className="text-base"
+                  >
                     {c}
                   </SelectItem>
                 ))}
@@ -194,7 +269,10 @@ export function ProjectForm({ mode = "create", project = null, onSuccess }: Proj
         </div>
 
         <div className="flex flex-col gap-2">
-          <Label htmlFor="abstract" className="text-sm font-semibold">
+          <Label
+            htmlFor="abstract"
+            className="text-sm font-semibold"
+          >
             Resumen
           </Label>
           <Textarea
@@ -218,19 +296,46 @@ export function ProjectForm({ mode = "create", project = null, onSuccess }: Proj
             }
           >
             {feedback.type === "ok" ? (
-              <CheckCircle2 className="size-5 shrink-0" aria-hidden="true" />
+              <CheckCircle2
+                className="size-5 shrink-0"
+                aria-hidden="true"
+              />
             ) : (
-              <AlertCircle className="size-5 shrink-0" aria-hidden="true" />
+              <AlertCircle
+                className="size-5 shrink-0"
+                aria-hidden="true"
+              />
             )}
             {feedback.text}
           </div>
         )}
 
-        <Button type="submit" size="lg" disabled={isPending} className="h-13 text-base font-semibold">
-          {mode === "edit" ? <PencilLine className="mr-2 size-5" aria-hidden="true" /> : <Plus className="mr-2 size-5" aria-hidden="true" />}
-          {isPending ? (mode === "edit" ? "Actualizando..." : "Registrando...") : mode === "edit" ? "Actualizar proyecto" : "Registrar proyecto"}
+        <Button
+          type="submit"
+          size="lg"
+          disabled={isPending}
+          className="h-13 text-base font-semibold"
+        >
+          {mode === "edit" ? (
+            <PencilLine
+              className="mr-2 size-5"
+              aria-hidden="true"
+            />
+          ) : (
+            <Plus
+              className="mr-2 size-5"
+              aria-hidden="true"
+            />
+          )}
+          {isPending
+            ? mode === "edit"
+              ? "Actualizando..."
+              : "Registrando..."
+            : mode === "edit"
+              ? "Actualizar proyecto"
+              : "Registrar proyecto"}
         </Button>
       </form>
     </>
-  )
+  );
 }

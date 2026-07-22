@@ -1,114 +1,98 @@
 "use server";
 
-import { db } from "@/lib/db";
-import { thesisProjects, type NewThesisProject } from "@/lib/db/schema";
-import { CARRERAS, type SearchResult } from "@/lib/projects";
-import { desc, sql } from "drizzle-orm";
+import { type QueryDocumentSnapshot } from "firebase-admin/firestore";
 import { revalidatePath } from "next/cache";
-import { cookies } from "next/headers";
+import {
+  CARRERAS,
+  type SearchResult,
+  type ThesisProject,
+  type NewThesisProject,
+  ProjectHistoryLog,
+} from "@/lib/projects";
+import { adminDb } from "@/lib/firebase/admin";
+import { getUserRole } from "@/app/actions/auth";
 
-const SUPABASE_URL = process.env.SUPABASE_URL;
-const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-async function supabaseFetch(path: string, opts?: RequestInit) {
-  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-    throw new Error("Supabase configuration missing");
-  }
-
-  const url = SUPABASE_URL.replace(/\/$/, "") + "/rest/v1" + path;
-  const headers: Record<string, string> = {
-    apikey: SUPABASE_SERVICE_ROLE_KEY,
-    Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
-    "Content-Type": "application/json",
-    Accept: "application/json",
-  };
-
-  const res = await fetch(url, { headers, ...opts });
-  if (!res.ok) {
-    const text = await res.text().catch(() => "");
-    throw new Error(`Supabase REST error ${res.status}: ${text}`);
-  }
-  return res.json();
-}
-
-const FALLBACK_PROJECTS = [
+// Actualizamos los IDs de respaldo a strings
+const FALLBACK_PROJECTS: ThesisProject[] = [
   {
-    id: 1,
+    id: "fallback-1",
     title: "Sistema de gestión de inventarios para laboratorios",
     studentName: "María Fernanda Quiroga",
     career: "Ingeniería en Sistemas",
     year: 2024,
     abstract:
       "Plataforma para gestionar insumos, solicitudes y reportes de laboratorio con flujo de aprobación.",
-    pdfUrl: null as string | null,
-    createdAt: new Date("2024-01-15T00:00:00.000Z"),
+    pdfUrl: null,
+    createdAt: new Date("2024-01-15T00:00:00.000Z").toISOString(),
   },
   {
-    id: 2,
+    id: "fallback-2",
     title: "Monitoreo remoto de equipos petroleros",
     studentName: "Carlos Alvarez",
     career: "Ingeniería Petrolera",
     year: 2023,
     abstract:
       "Sistema de monitoreo y alertas para equipos de producción usando sensores y dashboard web.",
-    pdfUrl: null as string | null,
-    createdAt: new Date("2023-08-20T00:00:00.000Z"),
+    pdfUrl: null,
+    createdAt: new Date("2023-08-20T00:00:00.000Z").toISOString(),
   },
-] as const;
-
-function toSearchResult(row: (typeof FALLBACK_PROJECTS)[number]): SearchResult {
-  return {
-    id: row.id,
-    title: row.title,
-    studentName: row.studentName,
-    career: row.career,
-    year: row.year,
-    abstract: row.abstract,
-    score: 0,
-  };
-}
+];
 
 async function ensureAdmin() {
+  const role = await getUserRole();
+  return role === "admin";
+}
+
+export async function getProjects(): Promise<ThesisProject[]> {
   try {
-    const store = await cookies();
-    const value =
-      typeof store.get === "function"
-        ? store.get("udabol_session")?.value
-        : undefined;
-    return value === "admin";
-  } catch (e) {
-    return false;
+    const snapshot = await adminDb
+      .collection("projects")
+      .orderBy("createdAt", "desc")
+      .get();
+
+    // Ahora usamos QueryDocumentSnapshot tipado contra DocumentData
+    return snapshot.docs.map((doc: QueryDocumentSnapshot<ThesisProject>) => {
+      const data = doc.data();
+      // Construimos el objeto respetando ThesisProject estrictamente
+      return {
+        id: doc.id,
+        title: data.title as string,
+        studentName: data.studentName as string,
+        career: data.career as string,
+        year: data.year as number,
+        abstract: data.abstract as string,
+        pdfUrl: data.pdfUrl as string | null | undefined,
+        userId: data.userId as string | null | undefined,
+        createdAt: data.createdAt as string,
+      };
+    });
+  } catch (err) {
+    console.error("Error obteniendo proyectos de Firestore:", err);
+    return FALLBACK_PROJECTS;
   }
 }
 
-export async function getProjects() {
-  // Prefer Supabase REST first (more likely to be reachable from cloud)
+async function addHistoryLog(
+  projectId: string,
+  action: "CREATE" | "UPDATE" | "DELETE" | "PDF_UPLOAD",
+  details: string,
+) {
   try {
-    const items = await supabaseFetch(`/thesis_projects?select=*`);
-    return (items as any[]).map((it) => ({
-      id: Number(it.id),
-      title: it.title,
-      studentName: it.student_name,
-      career: it.career,
-      year: Number(it.year),
-      abstract: it.abstract ?? "",
-      pdfUrl: it.pdf_url ?? null,
-      createdAt: new Date(it.created_at),
-    }));
-  } catch (restErr) {
-    try {
-      const rows = await db
-        .select()
-        .from(thesisProjects)
-        .orderBy(desc(thesisProjects.createdAt));
-      return rows;
-    } catch (dbErr) {
-      console.warn(
-        "No se pudo obtener proyectos (REST y DB fallaron). Usando datos de respaldo.",
-        { restErr, dbErr },
-      );
-      return FALLBACK_PROJECTS.map((project) => ({ ...project }));
-    }
+    const role = await getUserRole();
+    await adminDb
+      .collection("projects")
+      .doc(projectId)
+      .collection("history")
+      .add({
+        projectId,
+        action,
+        details,
+        timestamp: new Date().toISOString(),
+        userRole: role,
+      });
+  } catch (err) {
+    console.error("Error guardando el historial:", err);
+    // No lanzamos error para no bloquear la operación principal
   }
 }
 
@@ -131,7 +115,7 @@ export async function createProject(input: {
       error: "El título, el nombre del alumno y la carrera son obligatorios.",
     };
   }
-  if (!CARRERAS.includes(career as (typeof CARRERAS)[number])) {
+  if (!CARRERAS.includes(career as any)) {
     return {
       ok: false as const,
       error: "La carrera seleccionada no es válida.",
@@ -147,52 +131,42 @@ export async function createProject(input: {
     };
   }
 
-  // Prefer Supabase REST for writes first
   try {
-    await supabaseFetch(`/thesis_projects`, {
-      method: "POST",
-      headers: { Prefer: "return=representation" },
-      body: JSON.stringify({
-        title,
-        student_name: studentName,
-        career,
-        year: input.year,
-        abstract,
-        pdf_url: input.pdfUrl ?? null,
-      }),
+    const newProject: NewThesisProject = {
+      title: input.title.trim(),
+      studentName: input.studentName.trim(),
+      career: input.career.trim(),
+      year: input.year,
+      abstract: input.abstract.trim(),
+      pdfUrl: input.pdfUrl ?? null,
+    };
+
+    // 1. Guardamos el proyecto
+    const docRef = await adminDb.collection("projects").add({
+      ...newProject,
+      createdAt: new Date().toISOString(),
     });
+
+    // 2. Registramos el historial en la subcolección del nuevo ID
+    await addHistoryLog(
+      docRef.id,
+      "CREATE",
+      `Proyecto creado en el sistema. Alumno: ${newProject.studentName}`,
+    );
+
     revalidatePath("/");
     return { ok: true as const };
-  } catch (restErr) {
-    // If REST fails, try direct DB insert
-    try {
-      const newProject: NewThesisProject = {
-        title,
-        studentName,
-        career,
-        year: input.year,
-        abstract,
-        pdfUrl: input.pdfUrl ?? null,
-      };
-      await db.insert(thesisProjects).values(newProject);
-      revalidatePath("/");
-      return { ok: true as const };
-    } catch (dbErr) {
-      console.error("No se pudo guardar el proyecto (REST y DB fallaron).", {
-        restErr,
-        dbErr,
-      });
-      return {
-        ok: false as const,
-        error:
-          "No se pudo guardar el proyecto porque la base de datos no está disponible. Configura DATABASE_URL o conecta Supabase para habilitar el guardado.",
-      };
-    }
+  } catch (err) {
+    console.error("Error al crear proyecto en Firestore:", err);
+    return {
+      ok: false as const,
+      error: "No se pudo guardar el proyecto en la nube.",
+    };
   }
 }
 
 export async function updateProject(
-  id: number,
+  id: string,
   input: {
     title: string;
     studentName: string;
@@ -209,51 +183,79 @@ export async function updateProject(
     };
   }
 
-  // Prefer Supabase REST for update first
   try {
-    await supabaseFetch(`/thesis_projects?id=eq.${id}`, {
-      method: "PATCH",
-      headers: { Prefer: "return=representation" },
-      body: JSON.stringify({
-        title: input.title,
-        student_name: input.studentName,
-        career: input.career,
-        year: input.year,
-        abstract: input.abstract,
-        pdf_url: input.pdfUrl ?? null,
-      }),
+    const docRef = adminDb.collection("projects").doc(id);
+    const oldDoc = await docRef.get();
+
+    if (!oldDoc.exists) {
+      return { ok: false as const, error: "El proyecto no existe." };
+    }
+
+    const oldData = oldDoc.data() as ThesisProject;
+    const changes: string[] = [];
+
+    // Hacemos un diff manual para saber qué cambió
+    if (oldData.title !== input.title) changes.push(`Título modificado`);
+    if (oldData.studentName !== input.studentName)
+      changes.push(`Autor modificado`);
+    if (oldData.abstract !== input.abstract)
+      changes.push(`Resumen actualizado`);
+    if (oldData.pdfUrl !== input.pdfUrl) {
+      changes.push(input.pdfUrl ? `PDF subido/actualizado` : `PDF eliminado`);
+    }
+
+    // Si no hay cambios reales, no hacemos nada
+    if (changes.length === 0) {
+      return { ok: true as const };
+    }
+
+    // 1. Actualizamos el documento
+    await docRef.update({
+      title: input.title,
+      studentName: input.studentName,
+      career: input.career,
+      year: input.year,
+      abstract: input.abstract,
+      pdfUrl: input.pdfUrl ?? null,
     });
+
+    // 2. Guardamos el registro con los detalles exactos
+    const actionType =
+      oldData.pdfUrl !== input.pdfUrl ? "PDF_UPLOAD" : "UPDATE";
+    await addHistoryLog(id, actionType, changes.join(", "));
+
     revalidatePath("/");
     return { ok: true as const };
-  } catch (restErr) {
-    try {
-      await db
-        .update(thesisProjects)
-        .set({
-          title: input.title,
-          studentName: input.studentName,
-          career: input.career,
-          year: input.year,
-          abstract: input.abstract,
-          pdfUrl: input.pdfUrl ?? null,
-        })
-        .where(sql`${thesisProjects.id} = ${id}`);
-      revalidatePath("/");
-      return { ok: true as const };
-    } catch (dbErr) {
-      console.error("No se pudo actualizar el proyecto (REST y DB fallaron).", {
-        restErr,
-        dbErr,
-      });
-      return {
-        ok: false as const,
-        error: "No se pudo actualizar el proyecto.",
-      };
-    }
+  } catch (err) {
+    console.error("Error al actualizar proyecto en Firestore:", err);
+    return { ok: false as const, error: "No se pudo actualizar el proyecto." };
   }
 }
 
-export async function deleteProject(id: number) {
+export async function getProjectHistory(
+  projectId: string,
+): Promise<ProjectHistoryLog[]> {
+  try {
+    const snapshot = await adminDb
+      .collection("projects")
+      .doc(projectId)
+      .collection("history")
+      .orderBy("timestamp", "desc")
+      .get();
+
+    return snapshot.docs.map(
+      (doc: QueryDocumentSnapshot<ProjectHistoryLog>) => ({
+        id: doc.id,
+        ...(doc.data() as Omit<ProjectHistoryLog, "id">),
+      }),
+    );
+  } catch (err) {
+    console.error("Error obteniendo el historial:", err);
+    return [];
+  }
+}
+
+export async function deleteProject(id: string) {
   if (!(await ensureAdmin())) {
     return {
       ok: false as const,
@@ -261,91 +263,68 @@ export async function deleteProject(id: number) {
     };
   }
 
-  // Prefer Supabase REST for delete first
   try {
-    await supabaseFetch(`/thesis_projects?id=eq.${id}`, { method: "DELETE" });
+    // 1. Obtenemos todos los logs de la subcolección 'history'
+    const historySnapshot = await adminDb
+      .collection("projects")
+      .doc(id)
+      .collection("history")
+      .get();
+
+    // 2. Preparamos un "Batch" (lote de operaciones)
+    const batch = adminDb.batch();
+
+    // Agregamos cada log a la lista de ejecución (para borrarlos)
+    historySnapshot.docs.forEach(
+      (doc: QueryDocumentSnapshot<ProjectHistoryLog>) => {
+        batch.delete(doc.ref);
+      },
+    );
+
+    // 3. Agregamos el documento principal del proyecto a la lista de ejecución
+    const projectRef = adminDb.collection("projects").doc(id);
+    batch.delete(projectRef);
+
+    // 4. Ejecutamos todo de un solo golpe
+    await batch.commit();
+
     revalidatePath("/");
     return { ok: true as const };
-  } catch (restErr) {
-    try {
-      await db.delete(thesisProjects).where(sql`${thesisProjects.id} = ${id}`);
-      revalidatePath("/");
-      return { ok: true as const };
-    } catch (dbErr) {
-      console.error("No se pudo eliminar el proyecto (REST y DB fallaron).", {
-        restErr,
-        dbErr,
-      });
-      return { ok: false as const, error: "No se pudo eliminar el proyecto." };
-    }
+  } catch (err) {
+    console.error(
+      "Error al eliminar proyecto y su historial en Firestore:",
+      err,
+    );
+    return { ok: false as const, error: "No se pudo eliminar el proyecto." };
   }
 }
 
 export async function searchProjects(query: string): Promise<SearchResult[]> {
-  const q = query.trim();
+  const q = query.trim().toLowerCase();
+  const allProjects = await getProjects();
+
   if (!q) {
-    const rows = await getProjects();
-    return rows.map((r) => ({ ...r, score: 0 }));
+    return allProjects.map((p) => ({ ...p, score: 0 }));
   }
 
-  try {
-    const like = `%${q}%`;
-    const rows = await db.execute(sql`
-      SELECT
-        id,
-        title,
-        student_name AS "studentName",
-        career,
-        year,
-        abstract,
-        GREATEST(
-          word_similarity(${q}, title),
-          word_similarity(${q}, abstract),
-          word_similarity(${q}, student_name),
-          word_similarity(${q}, career)
-        ) AS score
-      FROM thesis_projects
-      WHERE
-        ${q} <% title
-        OR ${q} <% abstract
-        OR ${q} <% student_name
-        OR ${q} <% career
-        OR title ILIKE ${like}
-        OR abstract ILIKE ${like}
-        OR student_name ILIKE ${like}
-        OR career ILIKE ${like}
-      ORDER BY score DESC, year DESC
-      LIMIT 50
-    `);
+  // Calculamos el score de búsqueda en memoria
+  const results = allProjects
+    .map((project) => {
+      let score = 0;
+      const searchableText =
+        `${project.title} ${project.abstract} ${project.studentName} ${project.career}`.toLowerCase();
 
-    return (rows.rows as Record<string, unknown>[]).map((r) => ({
-      id: Number(r.id),
-      title: String(r.title),
-      studentName: String(r.studentName),
-      career: String(r.career),
-      year: Number(r.year),
-      abstract: String(r.abstract ?? ""),
-      score: Number(r.score ?? 0),
-    }));
-  } catch (error) {
-    console.warn(
-      "La búsqueda no pudo usar la base de datos. Usando resultados de respaldo.",
-      error,
-    );
-    return (
-      FALLBACK_PROJECTS.filter((project) => {
-        const hayCoincidencia = [
-          project.title,
-          project.abstract,
-          project.studentName,
-          project.career,
-        ]
-          .join(" ")
-          .toLowerCase()
-          .includes(q.toLowerCase());
+      if (searchableText.includes(q)) {
+        score += 10;
+        // Puntos extra si coincide exactamente con el título o nombre
+        if (project.title.toLowerCase().includes(q)) score += 5;
+        if (project.studentName.toLowerCase().includes(q)) score += 5;
+      }
 
-        return hayCoincidencia;
-      }) as (typeof FALLBACK_PROJECTS)[number][]
-    ).map(toSearchResult);
-  }
+      return { ...project, score };
+    })
+    .filter((project) => project.score > 0)
+    .sort((a, b) => b.score - a.score || b.year - a.year);
+
+  return results;
 }

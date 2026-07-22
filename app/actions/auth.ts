@@ -1,3 +1,4 @@
+// app/actions/auth.ts
 "use server";
 
 import { cookies } from "next/headers";
@@ -8,44 +9,46 @@ const SESSION_COOKIE = "udabol_session";
 
 export async function isLoggedIn() {
   const store = await cookies();
-  const v = store.get(SESSION_COOKIE)?.value;
-  return v === "admin" || v === "anonymous" || Boolean(v);
+  return store.has(SESSION_COOKIE);
 }
 
 export async function getUserRole(): Promise<UserRole> {
   const store = await cookies();
-  const value = store.get(SESSION_COOKIE)?.value;
-  return value === "admin" ? "admin" : "anonymous";
+  const sessionData = store.get(SESSION_COOKIE)?.value;
+
+  if (!sessionData) return "anonymous";
+
+  try {
+    if (sessionData === "admin") return "admin";
+    if (sessionData === "anonymous") return "anonymous";
+
+    const parsed = JSON.parse(sessionData);
+    return parsed.role === "admin" ? "admin" : "anonymous";
+  } catch {
+    return "anonymous";
+  }
 }
 
-export async function login(formData: FormData | null = null) {
+export async function loginAction({
+  idToken,
+  role,
+}: {
+  idToken: string;
+  role: string;
+}) {
   const store = await cookies();
-  const role = formData?.get("role") as string | null;
 
-  if (role === "admin") {
-    const email = formData?.get("email") as string | null;
-    const password = formData?.get("password") as string | null;
+  const sessionData = JSON.stringify({ token: idToken, role });
 
-    if (email !== "admin@udabol.edu.bo" || password !== "123456") {
-      return { error: "Credenciales incorrectas" };
-    }
+  store.set(SESSION_COOKIE, sessionData, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    path: "/",
+    maxAge: 60 * 60 * 24 * 7,
+  });
 
-    store.set(SESSION_COOKIE, "admin", {
-      httpOnly: true,
-      sameSite: "lax",
-      path: "/",
-      maxAge: 60 * 60 * 24 * 7,
-    });
-    redirect("/");
-  } else {
-    store.set(SESSION_COOKIE, "anonymous", {
-      httpOnly: true,
-      sameSite: "lax",
-      path: "/",
-      maxAge: 60 * 60 * 24 * 7,
-    });
-    redirect("/");
-  }
+  return { success: true };
 }
 
 export async function logout() {
