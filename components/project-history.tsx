@@ -11,6 +11,7 @@ import {
   Pencil,
   Trash2,
   FileUp,
+  RefreshCw,
   Loader2,
 } from "lucide-react";
 
@@ -53,6 +54,11 @@ export function ProjectHistoryList({ projectId }: { projectId: string }) {
       bg: "bg-green-500/10",
     },
     UPDATE: { icon: Pencil, color: "text-blue-500", bg: "bg-blue-500/10" },
+    RESTORE: {
+      icon: RefreshCw,
+      color: "text-amber-500",
+      bg: "bg-amber-500/10",
+    },
     DELETE: {
       icon: Trash2,
       color: "text-destructive",
@@ -60,6 +66,7 @@ export function ProjectHistoryList({ projectId }: { projectId: string }) {
     },
     PDF_UPLOAD: {
       icon: FileUp,
+  RefreshCw,
       color: "text-purple-500",
       bg: "bg-purple-500/10",
     },

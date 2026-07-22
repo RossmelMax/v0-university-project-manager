@@ -17,17 +17,28 @@ export async function POST(request: Request) {
       );
     }
 
-    // Prompt for the LLM
-    const prompt = `Eres un asistente legal experto en Bolivia. 
-A continuación se presenta el texto extraído de un borrador de contrato o proyecto de grado.
-Tu objetivo es extraer los siguientes datos y devolverlos ESTRICTAMENTE en formato JSON, sin texto adicional. Asegúrate de corregir cualquier error tipográfico originado por la lectura del escaneo (OCR).
-- title: El título del proyecto (string).
-- studentName: El nombre del postulante o alumno (string).
-- career: La carrera a la que pertenece (e.g. "Ingeniería en Sistemas", "Ingeniería en Telecomunicaciones", "Ingeniería Petrolera"). Si no estás seguro, devuelve un string vacío.
-- year: El año del documento (string, usualmente 4 dígitos).
-- abstract: El resumen del proyecto. Extrae solo el contenido bajo la sección "RESUMEN", "ABSTRACT" o "RESUMEN EJECUTIVO", sin incluir el título de la sección y sin mezclarlo con el índice. Si no hay un párrafo redactado de resumen, devuelve un string vacío.
+    // Prompt optimizado para tesis de grado bolivianas (formato UDABOL)
+    const prompt = `Eres un asistente experto en documentos académicos de universidades bolivianas, específicamente tesis y proyectos de grado de la Universidad de Aquino Bolivia (UDABOL).
 
-Aquí está el texto:
+A continuación se presenta el texto extraído (posiblemente con errores de OCR) de un proyecto de grado o tesis boliviana. Los documentos suelen tener este formato:
+- "CARRERA DE INGENIERÍA EN SISTEMAS" (o Telecomunicaciones, o Petrolera)
+- "POSTULANTE: Nombre Completo" o "AUTOR: Nombre Completo"
+- "EXAMEN DE GRADO" o "PROYECTO DE GRADO" o "TESIS DE GRADO"
+- Título del proyecto en mayúsculas después de la carrera
+- Sección "RESUMEN" o "RESUMEN EJECUTIVO" o "ABSTRACT" con el resumen
+- Fechas típicas: "Cochabamba - Bolivia", "Gestión 2024"
+
+Tu objetivo es extraer los siguientes datos y devolverlos ESTRICTAMENTE en formato JSON, sin texto adicional ni markdown. Corrige cualquier error tipográfico del OCR.
+
+Campos a extraer:
+- title: El título completo del proyecto de grado (string). Normalmente aparece en mayúsculas después de la carrera. Ej: "SISTEMA DE GESTIÓN ACADÉMICA PARA LA UNIVERSIDAD DE AQUINO BOLIVIA"
+- studentName: El nombre completo del postulante o autor (string). Busca después de palabras como "POSTULANTE:", "AUTOR:", "ALUMNO:", "POR:".
+- career: La carrera (string). Debe ser exactamente una de: "Ingeniería en Sistemas", "Ingeniería en Telecomunicaciones", "Ingeniería Petrolera", o string vacío si no se identifica claramente.
+- year: El año del documento (string, 4 dígitos). Busca en fechas como "Gestión 2024", "Cochabamba, 2023", o cualquier año cercano al texto.
+- abstract: El texto completo del resumen (string). Extrae SOLO el contenido bajo "RESUMEN", "RESUMEN EJECUTIVO" o "ABSTRACT". NO incluyas el título de la sección ni el índice/tabla de contenidos. Si el texto contiene índices o numeración mezclada con el resumen, sepáralos e incluye solo el párrafo del resumen. Devuelve string vacío si no encuentras un resumen claro.
+- keywords: Un array de strings con 5 a 10 palabras clave relevantes del proyecto (tecnologías, metodologías, temas principales). Ej: ["machine learning", "base de datos", "monitoreo remoto", "dashboard web"]. Si no hay resumen para extraerlas, devuelve un array vacío [].
+
+Texto del documento:
 """
 ${text.substring(0, 15000)}
 """`;
@@ -62,6 +73,7 @@ ${text.substring(0, 15000)}
       career: parsed.career || "",
       year: parsed.year || "",
       abstract: parsed.abstract || "",
+      keywords: parsed.keywords || [],
     });
   } catch (error) {
     console.error("Error in extract-pdf-data:", error);

@@ -17,7 +17,7 @@ import {
 } from "@/components/ui/select";
 import { PdfUpload } from "@/components/pdf-upload";
 import { PdfComparisonDialog } from "@/components/pdf-comparison-dialog";
-import { CheckCircle2, AlertCircle, Plus, PencilLine } from "lucide-react";
+import { CheckCircle2, AlertCircle, Plus, PencilLine, Tag } from "lucide-react";
 
 const CURRENT_YEAR = new Date().getFullYear();
 
@@ -25,12 +25,21 @@ type ProjectFormProps = {
   mode?: "create" | "edit";
   project?: SearchResult | null;
   onSuccess?: () => void;
+  initialData?: {
+    title?: string;
+    studentName?: string;
+    career?: string;
+    year?: number;
+    abstract?: string;
+    pdfUrl?: string | null;
+  } | null;
 };
 
 export function ProjectForm({
   mode = "create",
   project = null,
   onSuccess,
+  initialData = null,
 }: ProjectFormProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -40,6 +49,7 @@ export function ProjectForm({
   const [year, setYear] = useState(CURRENT_YEAR);
   const [abstract, setAbstract] = useState("");
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
+  const [tags, setTags] = useState("");
   const [feedback, setFeedback] = useState<{
     type: "ok" | "error";
     text: string;
@@ -51,6 +61,8 @@ export function ProjectForm({
     career: string;
     year: string;
     abstract: string;
+    pdfUrl: string;
+    keywords: string[];
   } | null>(null);
 
   useEffect(() => {
@@ -61,6 +73,7 @@ export function ProjectForm({
       setYear(project.year);
       setAbstract(project.abstract);
       setPdfUrl(project.pdfUrl ?? null);
+      setTags((project.tags ?? []).join(", "));
     } else {
       setTitle("");
       setStudentName("");
@@ -68,8 +81,19 @@ export function ProjectForm({
       setYear(CURRENT_YEAR);
       setAbstract("");
       setPdfUrl(null);
+      setTags("");
     }
   }, [project]);
+
+  useEffect(() => {
+    if (!initialData) return;
+    if (initialData.title !== undefined) setTitle(initialData.title);
+    if (initialData.studentName !== undefined) setStudentName(initialData.studentName);
+    if (initialData.career !== undefined) setCareer(initialData.career);
+    if (initialData.year !== undefined) setYear(initialData.year);
+    if (initialData.abstract !== undefined) setAbstract(initialData.abstract);
+    if (initialData.pdfUrl !== undefined) setPdfUrl(initialData.pdfUrl ?? null);
+  }, [initialData]);
 
   function handlePdfExtracted(data: {
     title: string;
@@ -77,6 +101,8 @@ export function ProjectForm({
     career: string;
     year: string;
     abstract: string;
+    pdfUrl: string;
+    keywords: string[];
   }) {
     setExtractedData(data);
     setShowComparison(true);
@@ -89,6 +115,10 @@ export function ProjectForm({
     if (extractedData.career) setCareer(extractedData.career);
     if (extractedData.year) setYear(Number(extractedData.year));
     if (extractedData.abstract) setAbstract(extractedData.abstract);
+    if (extractedData.pdfUrl) setPdfUrl(extractedData.pdfUrl);
+    if (extractedData.keywords && extractedData.keywords.length > 0) {
+      setTags(extractedData.keywords.join(", "));
+    }
     setShowComparison(false);
     setFeedback({
       type: "ok",
@@ -114,7 +144,7 @@ export function ProjectForm({
     }
 
     startTransition(async () => {
-      const payload = { title, studentName, career, year, abstract, pdfUrl };
+      const payload = { title, studentName, career, year, abstract, pdfUrl, tags: tags.split(",").map((t) => t.trim()).filter(Boolean) };
 
       // Aseguramos que si es modo edit, el ID se pase como string explícitamente
       const res =
@@ -150,7 +180,7 @@ export function ProjectForm({
     <>
       <PdfComparisonDialog
         open={showComparison}
-        current={{ title, studentName, career, year, abstract }}
+        current={{ title, studentName, career, year, abstract, tags }}
         extracted={
           extractedData ?? {
             title: "",
@@ -158,6 +188,7 @@ export function ProjectForm({
             career: "",
             year: "",
             abstract: "",
+            keywords: [],
           }
         }
         onUseExtracted={applyExtractedData}
@@ -284,6 +315,28 @@ export function ProjectForm({
             placeholder="Describe brevemente el objetivo y alcance del proyecto de grado..."
             className="resize-y text-base leading-relaxed"
           />
+        </div>
+
+        <div className="flex flex-col gap-2">
+          <Label
+            htmlFor="tags"
+            className="text-sm font-semibold"
+          >
+            <Tag className="inline size-3.5 mr-1" aria-hidden="true" />
+            Palabras clave / Tags
+          </Label>
+          <Input
+            id="tags"
+            name="tags"
+            value={tags}
+            onChange={(event) => setTags(event.target.value)}
+            placeholder="Ej. inteligencia artificial, base de datos, monitoreo"
+            className="h-12 text-base"
+          />
+          <p className="text-xs text-muted-foreground">
+            Ingresa palabras clave separadas por coma. Se extraerán
+            automáticamente del resumen si se deja vacío.
+          </p>
         </div>
 
         {feedback && (

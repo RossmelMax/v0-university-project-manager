@@ -1,9 +1,10 @@
 "use client"
 
 import { useState } from "react"
+import Link from "next/link"
 import { Badge } from "@/components/ui/badge"
 import type { SearchResult } from "@/lib/projects"
-import { User, Calendar, GraduationCap, FileText } from "lucide-react"
+import { User, Calendar, GraduationCap, FileText, Tag } from "lucide-react"
 import { PdfViewerDialog } from "@/components/pdf-viewer-dialog"
 
 const CAREER_STYLES: Record<string, string> = {
@@ -40,14 +41,33 @@ export function ProjectCard({ project }: { project: SearchResult }) {
             </Badge>
           </div>
 
-          <h3 className="text-pretty text-lg font-bold leading-snug text-card-foreground">
+          <Link
+            href={`/proyecto/${project.id}`}
+            className="text-pretty text-lg font-bold leading-snug text-card-foreground hover:text-primary transition-colors"
+          >
             {project.title}
-          </h3>
+          </Link>
 
           {project.abstract && (
             <p className="line-clamp-3 text-sm leading-relaxed text-muted-foreground">
               {project.abstract}
             </p>
+          )}
+
+          {/* Tags */}
+          {project.tags && project.tags.length > 0 && (
+            <div className="flex flex-wrap items-center gap-1.5">
+              {project.tags.slice(0, 5).map((t) => (
+                <Badge key={t} variant="secondary" className="text-[10px] font-medium px-1.5 py-0">
+                  {t}
+                </Badge>
+              ))}
+              {project.tags.length > 5 && (
+                <Badge variant="outline" className="text-[10px] font-medium px-1.5 py-0 text-muted-foreground">
+                  +{project.tags.length - 5}
+                </Badge>
+              )}
+            </div>
           )}
         </div>
 

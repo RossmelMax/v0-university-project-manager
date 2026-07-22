@@ -1,23 +1,14 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
-
-const SUPABASE_URL = process.env.SUPABASE_URL;
-const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
-const SUPABASE_STORAGE_BUCKET = process.env.SUPABASE_STORAGE_BUCKET;
-
-async function getCookieValue(name: string) {
-  const store = await cookies();
-  return store.get(name)?.value;
-}
+import { adminStorage, adminDb } from "@/lib/firebase/admin";
 
 function buildStoragePath(fileName: string) {
   const safeFileName = encodeURIComponent(fileName);
-  return ["projects", `${crypto.randomUUID()}-${safeFileName}`].join("/");
+  return `projects/${crypto.randomUUID()}-${safeFileName}`;
 }
 
 async function savePdfVersion(projectId: string, oldUrl: string) {
   try {
-    const { adminDb } = await import("@/lib/firebase/admin");
     await adminDb
       .collection("projects")
       .doc(projectId)
@@ -32,25 +23,11 @@ async function savePdfVersion(projectId: string, oldUrl: string) {
 }
 
 export async function POST(request: Request) {
-  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY || !SUPABASE_STORAGE_BUCKET) {
-    return NextResponse.json(
-      {
-        error:
-          "Supabase storage no está configurado. Define SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY y SUPABASE_STORAGE_BUCKET.",
-      },
-      { status: 500 },
-    );
-  }
+  const rawCookie = await (await cookies()).get("udabol_session")?.value;
+  const pipeIdx = rawCookie?.lastIndexOf("|") ?? -1;
+  const role = pipeIdx !== -1 ? rawCookie!.slice(pipeIdx + 1) : null;
 
-  const sessionCookie = await getCookieValue("udabol_session");
-  let session;
-  try {
-    session = sessionCookie ? JSON.parse(sessionCookie) : {};
-  } catch (e) {
-    session = {};
-  }
-
-  if (session?.role !== "admin") {
+  if (role !== "admin") {
     return NextResponse.json(
       { error: "Solo los administradores pueden subir PDFs." },
       { status: 403 },
@@ -71,7 +48,6 @@ export async function POST(request: Request) {
   // Si hay projectId, guardar versión anterior del PDF antes de reemplazar
   if (projectId) {
     try {
-      const { adminDb } = await import("@/lib/firebase/admin");
       const doc = await adminDb.collection("projects").doc(projectId).get();
       if (doc.exists) {
         const data = doc.data();
@@ -84,31 +60,25 @@ export async function POST(request: Request) {
     }
   }
 
+  // Subir a Firebase Storage usando Admin SDK
   const path = buildStoragePath(file.name);
-  const bucketUrl = `${SUPABASE_URL.replace(/\/$/, "")}/storage/v1/object/${SUPABASE_STORAGE_BUCKET}/${path}`;
+  const bucket = adminStorage.bucket();
+  const fileRef = bucket.file(path);
 
   const arrayBuffer = await file.arrayBuffer();
-  const res = await fetch(bucketUrl, {
-    method: "POST",
-    headers: {
-      apikey: SUPABASE_SERVICE_ROLE_KEY,
-      Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
-      "Content-Type": file.type || "application/pdf",
+  const buffer = Buffer.from(arrayBuffer);
+
+  await fileRef.save(buffer, {
+    metadata: {
+      contentType: "application/pdf",
+      cacheControl: "public, max-age=31536000",
     },
-    body: arrayBuffer,
   });
 
-  if (!res.ok) {
-    const message = await res.text().catch(() => "");
-    return NextResponse.json(
-      {
-        error: `No se pudo subir el PDF al almacenamiento de Supabase. ${res.status} ${message}`,
-      },
-      { status: 502 },
-    );
-  }
+  // Hacer el archivo público para que el visor de Google Docs pueda acceder
+  await fileRef.makePublic();
 
-  const publicUrl = `${SUPABASE_URL.replace(/\/$/, "")}/storage/v1/object/public/${SUPABASE_STORAGE_BUCKET}/${path}`;
+  const publicUrl = `https://storage.googleapis.com/${bucket.name}/${path}`;
 
   return NextResponse.json({ ok: true, url: publicUrl, projectId });
 }

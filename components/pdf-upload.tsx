@@ -5,14 +5,18 @@ import { Label } from "@/components/ui/label";
 import { extractPdfData } from "@/lib/pdf";
 import { FileText, Loader2, Upload, CheckCircle2 } from "lucide-react";
 
+type ExtractedPdfData = {
+  title: string;
+  studentName: string;
+  career: string;
+  year: string;
+  abstract: string;
+  pdfUrl: string;
+  keywords: string[];
+};
+
 type Props = {
-  onExtracted: (data: {
-    title: string;
-    studentName: string;
-    career: string;
-    year: string;
-    abstract: string;
-  }) => void;
+  onExtracted: (data: ExtractedPdfData) => void;
   onUploadComplete: (url: string) => void;
   existingPdfUrl?: string | null;
 };
@@ -48,7 +52,7 @@ export function PdfUpload({
 
       onUploadComplete(uploadResult.url);
       const data = await extractPdfData(file);
-      onExtracted(data);
+      onExtracted({ ...data, pdfUrl: uploadResult.url });
     } catch (err) {
       setError(
         "No se pudo procesar el PDF automáticamente. Intenta con otro archivo o completa los campos manualmente.",

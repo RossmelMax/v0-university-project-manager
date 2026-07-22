@@ -1,6 +1,7 @@
 import { getUserRole, logout } from "@/app/actions/auth"
 import { Button } from "@/components/ui/button"
 import { GraduationCap, LogOut, ShieldCheck } from "lucide-react"
+import { ThemeToggle } from "@/components/theme-toggle"
 
 export async function SiteHeader() {
   const role = await getUserRole()
@@ -24,6 +25,7 @@ export async function SiteHeader() {
             <span className="hidden sm:inline text-sidebar-accent-foreground">{role === "admin" ? "Administrador" : "Modo Invitado"}</span>
             <span className="sm:hidden text-sidebar-accent-foreground">{role === "admin" ? "Admin" : "Invitado"}</span>
           </div>
+          <ThemeToggle />
           <form action={logout}>
             <Button
               type="submit"

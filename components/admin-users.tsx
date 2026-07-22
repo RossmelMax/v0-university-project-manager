@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from "react";
 import { getAdminUsers, addAdminUser, removeAdminUser, toggleAdminStatus, type AdminUser } from "@/app/actions/users";
+import { getAuth, createUserWithEmailAndPassword } from "firebase/auth";
+import { auth } from "@/lib/firebase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -11,6 +13,7 @@ export function AdminUsers() {
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
+  const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -26,15 +29,37 @@ export function AdminUsers() {
   }
 
   async function handleAdd() {
-    if (!email.trim()) return;
+    if (!email.trim() || !password.trim()) {
+      setError("Email y contraseña son obligatorios");
+      return;
+    }
+    if (password.length < 6) {
+      setError("La contraseña debe tener al menos 6 caracteres");
+      return;
+    }
     setError("");
-    const result = await addAdminUser(email, name);
-    if (!result.ok) {
-      setError(result.error);
-    } else {
-      setEmail("");
-      setName("");
-      await loadUsers();
+
+    try {
+      // Crear usuario en Firebase Auth
+      await createUserWithEmailAndPassword(auth, email.trim(), password);
+
+      // Registrar como admin en Firestore
+      const result = await addAdminUser(email.trim(), name.trim());
+      if (!result.ok) {
+        setError(result.error || "Error al agregar admin");
+      } else {
+        setEmail("");
+        setName("");
+        setPassword("");
+        await loadUsers();
+      }
+    } catch (err: any) {
+      const code = err.code || "";
+      if (code === "auth/email-already-in-use") {
+        setError("Este email ya está registrado en Firebase Auth. Puedes agregarlo como admin si ya existe.");
+      } else {
+        setError(err.message || "Error al crear usuario");
+      }
     }
   }
 
@@ -57,23 +82,18 @@ export function AdminUsers() {
         </CardTitle>
       </CardHeader>
       <CardContent>
-        <div className="flex gap-2 mb-4">
-          <Input
-            placeholder="Email del nuevo admin"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-          />
-          <Input
-            placeholder="Nombre"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-          />
-          <Button onClick={handleAdd} className="shrink-0">
+        <div className="flex flex-col gap-3 mb-4">
+          <div className="grid gap-2 sm:grid-cols-3">
+            <Input placeholder="Email del nuevo admin" value={email} onChange={(e) => setEmail(e.target.value)} />
+            <Input placeholder="Nombre (opcional)" value={name} onChange={(e) => setName(e.target.value)} />
+            <Input placeholder="Contraseña" type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
+          </div>
+          <Button onClick={handleAdd} className="self-start">
             <UserPlus className="size-4 mr-1" />
-            Agregar
+            Crear Administrador
           </Button>
         </div>
-        {error && <p className="text-sm text-red-500 mb-2">{error}</p>}
+        {error && <p className="text-sm text-destructive mb-2">{error}</p>}
         {loading ? (
           <p className="text-sm text-muted-foreground">Cargando...</p>
         ) : users.length === 0 ? (
@@ -81,35 +101,20 @@ export function AdminUsers() {
         ) : (
           <div className="space-y-2">
             {users.map((u) => (
-              <div
-                key={u.id}
-                className="flex items-center justify-between p-3 rounded-lg border"
-              >
+              <div key={u.id} className="flex items-center justify-between p-3 rounded-lg border">
                 <div>
                   <p className="font-medium">{u.displayName}</p>
                   <p className="text-sm text-muted-foreground">{u.email}</p>
-                  <p className="text-xs text-muted-foreground">
-                    Agregado: {new Date(u.addedAt).toLocaleDateString()}
-                  </p>
+                  <p className="text-xs text-muted-foreground">Agregado: {new Date(u.addedAt).toLocaleDateString()}</p>
                 </div>
                 <div className="flex gap-2">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => handleToggle(u.id, u.isActive)}
+                  <Button variant="ghost" size="sm" onClick={() => handleToggle(u.id, u.isActive)}
+                    title={u.isActive ? "Desactivar administrador" : "Activar administrador"}
                   >
-                    {u.isActive ? (
-                      <Shield className="size-4 text-green-500" />
-                    ) : (
-                      <ShieldOff className="size-4 text-red-500" />
-                    )}
+                    {u.isActive ? <Shield className="size-4 text-green-500" /> : <ShieldOff className="size-4 text-red-500" />}
                   </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => handleRemove(u.id)}
-                  >
-                    <Trash2 className="size-4 text-red-500" />
+                  <Button variant="ghost" size="sm" onClick={() => handleRemove(u.id)}>
+                    <Trash2 className="size-4 text-destructive" />
                   </Button>
                 </div>
               </div>

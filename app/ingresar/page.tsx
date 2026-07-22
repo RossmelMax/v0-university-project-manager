@@ -54,7 +54,7 @@ export default function IngresarPage() {
         if (res?.success) {
           router.push("/");
         } else {
-          setError(res?.error || "Error al iniciar sesión");
+          setError("Error al iniciar sesión. Verifica las credenciales.");
         }
       } catch (err: any) {
         setError("Credenciales incorrectas o usuario no encontrado.");

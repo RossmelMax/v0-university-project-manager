@@ -11,6 +11,7 @@ type Props = {
         career: string
         year: number
         abstract: string
+        tags?: string
     }
     extracted: {
         title: string
@@ -18,6 +19,7 @@ type Props = {
         career: string
         year: string
         abstract: string
+        keywords?: string[]
     }
     onUseExtracted: () => void
     onKeepCurrent: () => void
@@ -28,7 +30,7 @@ export function PdfComparisonDialog({ open, current, extracted, onUseExtracted, 
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
-            <Card className="w-full max-w-2xl p-6">
+            <Card className="w-full max-w-2xl p-6 max-h-[90vh] overflow-y-auto">
                 <h3 className="text-lg font-semibold">Datos detectados en el nuevo PDF</h3>
                 <p className="mt-2 text-sm text-muted-foreground">
                     Revisa los datos detectados y elige si quieres usar los nuevos o conservar los actuales.
@@ -42,7 +44,8 @@ export function PdfComparisonDialog({ open, current, extracted, onUseExtracted, 
                             <li><span className="font-medium">Alumno:</span> {current.studentName || "—"}</li>
                             <li><span className="font-medium">Carrera:</span> {current.career || "—"}</li>
                             <li><span className="font-medium">Año:</span> {current.year || "—"}</li>
-                            <li><span className="font-medium">Resumen:</span> {current.abstract || "—"}</li>
+                            <li><span className="font-medium">Resumen:</span> {current.abstract ? current.abstract.slice(0, 120) + (current.abstract.length > 120 ? "..." : "") : "—"}</li>
+                            <li><span className="font-medium">Tags:</span> {current.tags || "—"}</li>
                         </ul>
                     </div>
                     <div className="rounded-lg border border-border p-4">
@@ -52,7 +55,8 @@ export function PdfComparisonDialog({ open, current, extracted, onUseExtracted, 
                             <li><span className="font-medium">Alumno:</span> {extracted.studentName || "—"}</li>
                             <li><span className="font-medium">Carrera:</span> {extracted.career || "—"}</li>
                             <li><span className="font-medium">Año:</span> {extracted.year || "—"}</li>
-                            <li><span className="font-medium">Resumen:</span> {extracted.abstract || "—"}</li>
+                            <li><span className="font-medium">Resumen:</span> {extracted.abstract ? extracted.abstract.slice(0, 120) + (extracted.abstract.length > 120 ? "..." : "") : "—"}</li>
+                            <li><span className="font-medium">Keywords:</span> {extracted.keywords && extracted.keywords.length > 0 ? extracted.keywords.join(", ") : "—"}</li>
                         </ul>
                     </div>
                 </div>

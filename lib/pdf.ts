@@ -4,6 +4,7 @@ export type PdfExtraction = {
   career: string;
   year: string;
   abstract: string;
+  keywords: string[];
 };
 
 function normalizeText(value: string) {
@@ -14,6 +15,52 @@ function normalizeText(value: string) {
 function extractYear(text: string) {
   const match = text.match(/\b(19|20)\d{2}\b/);
   return match?.[0] ?? "";
+}
+
+/**
+ * Extrae palabras clave de un texto usando heurística simple:
+ * remueve stopwords en español, busca palabras significativas frecuentes.
+ * Retorna un array de hasta 8 keywords.
+ */
+export function extractKeywords(text: string): string[] {
+  if (!text || text.trim().length < 30) return [];
+
+  const stopwords = new Set([
+    "el", "la", "los", "las", "un", "una", "unos", "unas", "de", "del",
+    "en", "con", "por", "para", "que", "es", "son", "se", "su", "al",
+    "como", "más", "este", "esta", "entre", "cada", "todo", "todos",
+    "fue", "han", "ha", "ser", "tiene", "tienen", "sus", "lo", "le",
+    "del", "así", "muy", "sin", "sobre", "también", "desde", "hasta",
+    "donde", "cuando", "durante", "pero", "o", "y", "e", "a",
+    "the", "of", "and", "in", "to", "a", "is", "for", "with", "on",
+    "this", "that", "are", "be", "was", "were", "it", "its", "an",
+  ]);
+
+  const normalized = text
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-záéíóúñ0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  const words = normalized.split(/\s+/).filter((w) => {
+    return w.length >= 4 && !stopwords.has(w) && !/^\d+$/.test(w);
+  });
+
+  // Contar frecuencia
+  const freq: Record<string, number> = {};
+  for (const w of words) {
+    freq[w] = (freq[w] || 0) + 1;
+  }
+
+  // Ordenar por frecuencia descendente, luego alfabéticamente
+  const sorted = Object.entries(freq)
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .slice(0, 8)
+    .map(([word]) => word);
+
+  return sorted;
 }
 
 function inferCareer(text: string) {
@@ -72,12 +119,14 @@ export async function extractPdfData(file: File): Promise<PdfExtraction> {
     if (response.ok) {
       const data = await response.json();
       if (data.title || data.studentName) {
+        const abstractText = data.abstract || "";
         return {
           title: data.title || "",
           studentName: data.studentName || "",
           career: data.career || "",
           year: data.year || "",
-          abstract: data.abstract || "",
+          abstract: abstractText,
+          keywords: data.keywords ?? extractKeywords(abstractText),
         };
       }
     }
@@ -119,5 +168,6 @@ export async function extractPdfData(file: File): Promise<PdfExtraction> {
     career: inferCareer(normalizedText),
     year: extractYear(normalizedText),
     abstract: finalAbstract,
+    keywords: extractKeywords(finalAbstract),
   };
 }

@@ -15,6 +15,7 @@ export interface ThesisProject {
   career: string;
   year: number;
   abstract: string;
+  tags?: string[];
   pdfUrl?: string | null;
   userId?: string | null;
   createdAt: string;
@@ -28,6 +29,12 @@ export type NewThesisProject = Omit<ThesisProject, "id" | "createdAt">;
 export type SearchResult = ThesisProject & {
   score?: number;
 };
+
+export interface PdfVersion {
+  id: string;
+  url: string;
+  uploadedAt: string;
+}
 
 export type AuditActionType = "CREATE" | "UPDATE" | "DELETE" | "RESTORE" | "PDF_UPLOAD";
 
