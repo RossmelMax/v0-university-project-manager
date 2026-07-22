@@ -420,6 +420,37 @@ export async function getDeletedProjects(): Promise<ThesisProject[]> {
   }
 }
 
+export interface PdfVersion {
+  id: string;
+  url: string;
+  uploadedAt: string;
+}
+
+export async function getPdfHistory(
+  projectId: string
+): Promise<PdfVersion[]> {
+  try {
+    const snapshot = await adminDb
+      .collection("projects")
+      .doc(projectId)
+      .collection("pdfHistory")
+      .orderBy("uploadedAt", "desc")
+      .get();
+
+    return snapshot.docs.map((doc) => {
+      const data = doc.data() as Record<string, unknown>;
+      return {
+        id: doc.id,
+        url: data.url as string,
+        uploadedAt: data.uploadedAt as string,
+      };
+    });
+  } catch (err) {
+    console.error("Error obteniendo historial de PDFs:", err);
+    return [];
+  }
+}
+
 export async function searchProjects(query: string): Promise<SearchResult[]> {
   const q = query.trim().toLowerCase();
   const allProjects = await getProjects();

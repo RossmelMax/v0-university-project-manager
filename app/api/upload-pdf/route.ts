@@ -15,6 +15,22 @@ function buildStoragePath(fileName: string) {
   return ["projects", `${crypto.randomUUID()}-${safeFileName}`].join("/");
 }
 
+async function savePdfVersion(projectId: string, oldUrl: string) {
+  try {
+    const { adminDb } = await import("@/lib/firebase/admin");
+    await adminDb
+      .collection("projects")
+      .doc(projectId)
+      .collection("pdfHistory")
+      .add({
+        url: oldUrl,
+        uploadedAt: new Date().toISOString(),
+      });
+  } catch (err) {
+    console.error("Error guardando versión anterior del PDF:", err);
+  }
+}
+
 export async function POST(request: Request) {
   if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY || !SUPABASE_STORAGE_BUCKET) {
     return NextResponse.json(
@@ -26,7 +42,6 @@ export async function POST(request: Request) {
     );
   }
 
-  // Obtenemos la cookie y la parseamos como JSON
   const sessionCookie = await getCookieValue("udabol_session");
   let session;
   try {
@@ -35,7 +50,6 @@ export async function POST(request: Request) {
     session = {};
   }
 
-  // Ahora comparamos la propiedad role extraída del objeto
   if (session?.role !== "admin") {
     return NextResponse.json(
       { error: "Solo los administradores pueden subir PDFs." },
@@ -45,12 +59,29 @@ export async function POST(request: Request) {
 
   const formData = await request.formData();
   const file = formData.get("pdf");
+  const projectId = formData.get("projectId") as string | null;
 
   if (!(file instanceof File)) {
     return NextResponse.json(
       { error: "No se recibió un archivo PDF válido." },
       { status: 400 },
     );
+  }
+
+  // Si hay projectId, guardar versión anterior del PDF antes de reemplazar
+  if (projectId) {
+    try {
+      const { adminDb } = await import("@/lib/firebase/admin");
+      const doc = await adminDb.collection("projects").doc(projectId).get();
+      if (doc.exists) {
+        const data = doc.data();
+        if (data?.pdfUrl) {
+          await savePdfVersion(projectId, data.pdfUrl as string);
+        }
+      }
+    } catch (err) {
+      console.error("Error al verificar pdfUrl anterior:", err);
+    }
   }
 
   const path = buildStoragePath(file.name);
@@ -79,5 +110,5 @@ export async function POST(request: Request) {
 
   const publicUrl = `${SUPABASE_URL.replace(/\/$/, "")}/storage/v1/object/public/${SUPABASE_STORAGE_BUCKET}/${path}`;
 
-  return NextResponse.json({ ok: true, url: publicUrl });
+  return NextResponse.json({ ok: true, url: publicUrl, projectId });
 }
