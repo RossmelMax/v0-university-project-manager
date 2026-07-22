@@ -1,10 +1,10 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Trash2, PencilLine, History, Search, ArrowUpDown } from "lucide-react";
+import { Trash2, PencilLine, History, Search, ArrowUpDown, Download, FileText, X } from "lucide-react";
 import { PaginationControls } from "@/components/pagination-controls";
 import {
   Dialog,
@@ -12,7 +12,14 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import type { SearchResult } from "@/lib/projects";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { CARRERAS, type SearchResult } from "@/lib/projects";
 import { ProjectHistoryList } from "@/components/project-history";
 
 type SortKey = "title" | "year" | "career" | "studentName";
@@ -28,6 +35,9 @@ export function AdminProjects({ projects, onDelete, onEdit }: Props) {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [historyProject, setHistoryProject] = useState<SearchResult | null>(null);
   const [search, setSearch] = useState("");
+  const [career, setCareer] = useState("");
+  const [yearFrom, setYearFrom] = useState("");
+  const [yearTo, setYearTo] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("year");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [pageSize, setPageSize] = useState(10);
@@ -35,14 +45,27 @@ export function AdminProjects({ projects, onDelete, onEdit }: Props) {
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
+    const from = parseInt(yearFrom, 10);
+    const to = parseInt(yearTo, 10);
+    const fromNum = isFinite(from) ? from : null;
+    const toNum = isFinite(to) ? to : null;
     let list = projects;
     if (q) {
-      list = projects.filter(
+      list = list.filter(
         (p) =>
           p.title.toLowerCase().includes(q) ||
           p.studentName.toLowerCase().includes(q) ||
           p.career.toLowerCase().includes(q)
       );
+    }
+    if (career) {
+      list = list.filter((p) => p.career === career);
+    }
+    if (fromNum !== null) {
+      list = list.filter((p) => p.year >= fromNum);
+    }
+    if (toNum !== null) {
+      list = list.filter((p) => p.year <= toNum);
     }
     return [...list].sort((a, b) => {
       const aVal = String(a[sortKey] ?? "");
@@ -50,9 +73,8 @@ export function AdminProjects({ projects, onDelete, onEdit }: Props) {
       const cmp = aVal.localeCompare(bVal, "es");
       return sortDir === "asc" ? cmp : -cmp;
     });
-  }, [projects, search, sortKey, sortDir]);
+  }, [projects, search, career, yearFrom, yearTo, sortKey, sortDir]);
 
-  // Paginación
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
   const safePage = Math.max(1, Math.min(currentPage, totalPages));
   const paginated = filtered.slice((safePage - 1) * pageSize, safePage * pageSize);
@@ -60,6 +82,37 @@ export function AdminProjects({ projects, onDelete, onEdit }: Props) {
   function toggleSort(key: SortKey) {
     if (sortKey === key) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
     else { setSortKey(key); setSortDir("asc"); }
+  }
+
+  function clearFilters() {
+    setCareer("");
+    setYearFrom("");
+    setYearTo("");
+    setCurrentPage(1);
+  }
+
+  const hasFilters = !!career || !!yearFrom || !!yearTo;
+
+  function exportCSV() {
+    const headers = ["Título", "Alumno", "Carrera", "Año", "Resumen", "URL PDF"];
+    const rows = filtered.map((p) => [
+      `"${p.title.replace(/"/g, '""')}"`,
+      `"${p.studentName.replace(/"/g, '""')}"`,
+      `"${p.career}"`,
+      p.year,
+      `"${(p.abstract || "").replace(/"/g, '""')}"`,
+      p.pdfUrl || "",
+    ]);
+    const csv = [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
+    const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `proyectos-udabol-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
   }
 
   async function handleDelete(id: string, title: string) {
@@ -101,9 +154,58 @@ export function AdminProjects({ projects, onDelete, onEdit }: Props) {
         </div>
       </div>
 
+      {/* Filtros */}
+      <div className="flex flex-wrap items-end gap-3">
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor="admin-filter-career" className="text-xs font-semibold text-muted-foreground">Carrera</label>
+          <Select value={career} onValueChange={(val) => { setCareer(val === "all" || !val ? "" : val); setCurrentPage(1); }}>
+            <SelectTrigger id="admin-filter-career" className="!h-10 w-[240px] text-sm items-center">
+              <SelectValue placeholder="Todas las carreras" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all" className="text-sm">Todas las carreras</SelectItem>
+              {CARRERAS.map((c) => (<SelectItem key={c} value={c} className="text-sm">{c}</SelectItem>))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor="admin-filter-year-from" className="text-xs font-semibold text-muted-foreground">Año desde</label>
+          <Input
+            id="admin-filter-year-from" type="number" min={1980} max={2100}
+            value={yearFrom} onChange={(e) => { setYearFrom(e.target.value); setCurrentPage(1); }}
+            placeholder="Ej. 2020" className="h-10 w-[120px] text-sm"
+          />
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor="admin-filter-year-to" className="text-xs font-semibold text-muted-foreground">Año hasta</label>
+          <Input
+            id="admin-filter-year-to" type="number" min={1980} max={2100}
+            value={yearTo} onChange={(e) => { setYearTo(e.target.value); setCurrentPage(1); }}
+            placeholder="Ej. 2025" className="h-10 w-[120px] text-sm"
+          />
+        </div>
+
+        {hasFilters && (
+          <Button type="button" variant="ghost" size="sm" onClick={clearFilters} className="h-10 gap-1.5 text-xs cursor-pointer">
+            <X className="size-3.5" /> Limpiar filtros
+          </Button>
+        )}
+
+        <div className="ml-auto flex items-center gap-3">
+          <p className="text-sm text-muted-foreground">
+            {filtered.length} {filtered.length === 1 ? "proyecto" : "proyectos"}
+          </p>
+          <Button variant="outline" size="sm" onClick={exportCSV} className="text-xs">
+            <Download className="size-3.5 mr-1" /> Exportar CSV
+          </Button>
+        </div>
+      </div>
+
       {filtered.length === 0 ? (
         <p className="text-sm text-muted-foreground py-8 text-center">
-          {search ? "Sin resultados para esa búsqueda." : "No hay proyectos aún."}
+          {search || hasFilters ? "Sin resultados para esa búsqueda." : "No hay proyectos aún."}
         </p>
       ) : (
         <>
@@ -149,6 +251,18 @@ export function AdminProjects({ projects, onDelete, onEdit }: Props) {
             <DialogTitle className="text-xl">Auditoría del Proyecto</DialogTitle>
             <p className="text-sm text-muted-foreground">{historyProject?.title}</p>
           </DialogHeader>
+          {historyProject?.pdfUrl && (
+            <div className="mb-4">
+              <a
+                href={historyProject.pdfUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={buttonVariants({ variant: "outline", size: "sm" })}
+              >
+                <FileText className="mr-1 size-3.5" /> Ver PDF
+              </a>
+            </div>
+          )}
           {historyProject && <ProjectHistoryList projectId={historyProject.id} />}
         </DialogContent>
       </Dialog>

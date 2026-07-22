@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { getProjects, getTopContributors, type TopContributor } from "@/app/actions/projects";
 import type { SearchResult } from "@/lib/projects";
 import {
-  BarChart3, GraduationCap, BookOpen, FileText,
+  BarChart3, BookOpen, FileText,
   Calendar, FolderOpen, FileX2, Hash, Users,
   Medal,
 } from "lucide-react";
@@ -57,9 +57,8 @@ export function Dashboard() {
   return (
     <div className="flex flex-col gap-6">
       {/* Stats cards */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <StatCard icon={<BookOpen className="size-6" />} label="Total Proyectos" value={total} color="text-primary" bg="bg-primary/10" />
-        <StatCard icon={<GraduationCap className="size-6" />} label="Carreras" value={topCarreras.length} color="text-chart-2" bg="bg-chart-2/10" />
         <StatCard icon={<FileText className="size-6" />} label="Con PDF" value={conPdf} color="text-[oklch(0.55_0.15_150)]" bg="bg-[oklch(0.55_0.15_150)]/10" />
         <StatCard icon={<Users className="size-6" />} label="Tags distintas" value={Object.keys(tagsFreq).length} color="text-[oklch(0.55_0.15_280)]" bg="bg-[oklch(0.55_0.15_280)]/10" />
       </div>
@@ -105,40 +104,16 @@ export function Dashboard() {
           <h3 className="mb-4 flex items-center gap-2 text-lg font-bold text-card-foreground">
             <Calendar className="size-5 text-primary" /> Proyectos por Año
           </h3>
-          <div className="space-y-3 mb-5">
+          <div className="space-y-3">
             {anosList.map(([ano, count]) => {
-              const maxVal = Math.max(...anosList.map(([,c]) => c));
+              const maxVal = Math.max(...Object.values(anos));
               return (
-                <BarRow key={ano} label={ano} count={count} max={maxVal} />
+                <BarRow key={ano} label={ano} count={count} max={maxVal} total={total} />
               );
             })}
           </div>
-          {/* Tabla resumen */}
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-border text-left text-xs font-semibold uppercase text-muted-foreground">
-                  <th className="pb-2 pr-3">Año</th>
-                  <th className="pb-2 pr-3">Proyectos</th>
-                  <th className="pb-2 text-right">% del total</th>
-                </tr>
-              </thead>
-              <tbody>
-                {anosList.map(([ano, count]) => (
-                  <tr key={ano} className="border-b border-border/60 last:border-0">
-                    <td className="py-2 pr-3 font-medium">{ano}</td>
-                    <td className="py-2 pr-3">{count}</td>
-                    <td className="py-2 text-right text-muted-foreground">
-                      {total > 0 ? `${Math.round((count / total) * 100)}%` : "—"}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
         </div>
       )}
-
       {/* Top contribuidores */}
       {contributors.length > 0 && (
         <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
@@ -201,15 +176,20 @@ function StatCard({ icon, label, value, color, bg }: { icon: React.ReactNode; la
   );
 }
 
-function BarRow({ label, count, max }: { label: string; count: number; max: number }) {
+function BarRow({ label, count, max, total }: { label: string; count: number; max: number; total?: number }) {
   const pct = Math.round((count / max) * 100);
+  const totalPct = total ? Math.round((count / total) * 100) : 0;
   return (
     <div className="flex items-center gap-3">
       <span className="w-48 truncate text-sm font-medium text-foreground">{label}</span>
       <div className="flex-1 h-5 rounded-lg bg-muted overflow-hidden">
         <div className="h-full rounded-lg bg-primary transition-all duration-500" style={{ width: `${pct}%` }} />
       </div>
-      <span className="w-24 text-right text-sm font-semibold text-card-foreground">{count} ({Math.round((count/max)*100)}%)</span>
+      <span className="w-36 text-right text-sm font-semibold text-card-foreground">
+        {total !== undefined
+          ? `${count} proyectos (${totalPct}% del total)`
+          : `${count} (${pct}%)`}
+      </span>
     </div>
   );
 }

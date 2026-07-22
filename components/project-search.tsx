@@ -13,7 +13,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Search, Loader2, SearchX, Download, X } from "lucide-react"
+import { Search, Loader2, SearchX, X } from "lucide-react"
 import { PaginationControls } from "@/components/pagination-controls"
 
 export function ProjectSearch({ initial }: { initial: SearchResult[] }) {
@@ -70,28 +70,6 @@ export function ProjectSearch({ initial }: { initial: SearchResult[] }) {
   const totalPages = Math.max(1, Math.ceil(results.length / pageSize))
   const safePage = Math.max(1, Math.min(currentPage, totalPages))
   const paginatedResults = results.slice((safePage - 1) * pageSize, safePage * pageSize)
-
-  function exportCSV() {
-    const headers = ["Título", "Alumno", "Carrera", "Año", "Resumen", "URL PDF"]
-    const rows = results.map((p) => [
-      `"${p.title.replace(/"/g, '""')}"`,
-      `"${p.studentName.replace(/"/g, '""')}"`,
-      `"${p.career}"`,
-      p.year,
-      `"${(p.abstract || "").replace(/"/g, '""')}"`,
-      p.pdfUrl || "",
-    ])
-    const csv = [headers.join(","), ...rows.map((r) => r.join(","))].join("\n")
-    const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8" })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement("a")
-    a.href = url
-    a.download = `proyectos-udabol-${new Date().toISOString().slice(0, 10)}.csv`
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-    URL.revokeObjectURL(url)
-  }
 
   return (
     <div className="flex flex-col gap-6">
@@ -161,11 +139,6 @@ export function ProjectSearch({ initial }: { initial: SearchResult[] }) {
             ? `${results.length} ${results.length === 1 ? "resultado" : "resultados"} encontrados`
             : `${results.length} ${results.length === 1 ? "proyecto registrado" : "proyectos registrados"}`}
         </p>
-        {results.length > 0 && (
-          <Button variant="outline" size="sm" onClick={exportCSV} className="text-xs">
-            <Download className="size-3.5 mr-1" /> Exportar CSV
-          </Button>
-        )}
       </div>
 
       {results.length === 0 ? (
