@@ -120,7 +120,7 @@ export function ProjectDetail({
                 <FileText className="size-5" aria-hidden="true" />
                 Ver PDF
               </Button>
-              <a href={project.pdfUrl} target="_blank" rel="noreferrer" download>
+              <a href={"/api/pdf-proxy?url=" + encodeURIComponent(project.pdfUrl)} target="_blank" rel="noreferrer" download>
                 <Button
                   variant="outline"
                   size="lg"
@@ -177,7 +177,7 @@ export function ProjectDetail({
                     })}
                   </span>
                   <a
-                    href={version.url}
+                    href={"/api/pdf-proxy?url=" + encodeURIComponent(version.url)}
                     target="_blank"
                     rel="noreferrer"
                     className="text-sm font-medium text-primary hover:underline flex items-center gap-1"

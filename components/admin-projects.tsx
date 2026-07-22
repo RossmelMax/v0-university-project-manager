@@ -299,7 +299,7 @@ export function AdminProjects({ projects, onDelete, onEdit }: Props) {
                       })}
                     </span>
                     <a
-                      href={version.url}
+                      href={"/api/pdf-proxy?url=" + encodeURIComponent(version.url)}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="text-sm font-medium text-primary hover:underline flex items-center gap-1 shrink-0"
