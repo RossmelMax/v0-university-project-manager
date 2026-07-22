@@ -17,27 +17,7 @@ export default async function HomePage() {
     <div className="min-h-svh bg-background flex flex-col">
       <SiteHeader />
 
-      <section className="bg-sidebar text-sidebar-foreground border-b border-sidebar-border overflow-hidden relative">
-        <div className="absolute inset-0 bg-linear-to-r from-primary/10 to-transparent pointer-events-none" />
-        <div className="mx-auto max-w-5xl px-4 py-10 sm:px-6 sm:py-14 relative z-10">
-          <div className="flex items-center gap-3 mb-4">
-            <div className="bg-primary/20 p-2 rounded-xl text-primary">
-              <BookOpen className="size-6" />
-            </div>
-            <h1 className="text-3xl font-bold leading-tight tracking-tight sm:text-4xl text-primary-foreground">
-              Proyectos de Grado
-            </h1>
-          </div>
-          <p className="max-w-2xl text-base leading-relaxed text-sidebar-foreground/80 sm:text-lg">
-            Explora el repositorio oficial de investigaciones y proyectos de
-            grado de las carreras de{" "}
-            <span className="font-semibold text-sidebar-foreground">
-              Ingeniería en Sistemas, Telecomunicaciones y Petrolera
-            </span>{" "}
-            de la Universidad de Aquino Bolivia.
-          </p>
-        </div>
-      </section>
+      {/* Hero section eliminado por claridad */}
 
       <main className="mx-auto max-w-5xl px-4 py-8 sm:px-6 sm:py-12 flex-1 w-full">
         <HomeTabs

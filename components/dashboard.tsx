@@ -209,7 +209,7 @@ function BarRow({ label, count, max }: { label: string; count: number; max: numb
       <div className="flex-1 h-5 rounded-lg bg-muted overflow-hidden">
         <div className="h-full rounded-lg bg-primary transition-all duration-500" style={{ width: `${pct}%` }} />
       </div>
-      <span className="w-10 text-right text-sm font-semibold text-card-foreground">{count}</span>
+      <span className="w-24 text-right text-sm font-semibold text-card-foreground">{count} ({Math.round((count/max)*100)}%)</span>
     </div>
   );
 }

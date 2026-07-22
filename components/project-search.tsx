@@ -31,10 +31,12 @@ export function ProjectSearch({ initial }: { initial: SearchResult[] }) {
   useEffect(() => {
     const handle = setTimeout(() => {
       setYearError(null)
-      const from = yearFrom ? Number(yearFrom) : null
-      const to = yearTo ? Number(yearTo) : null
+      const from = parseInt(yearFrom, 10)
+      const to = parseInt(yearTo, 10)
+      const fromNum = isFinite(from) ? from : null
+      const toNum = isFinite(to) ? to : null
 
-      if (from !== null && to !== null && from > to) {
+      if (fromNum !== null && toNum !== null && fromNum > toNum) {
         setYearError('El año "desde" no puede ser mayor al año "hasta"')
         return
       }
@@ -42,13 +44,13 @@ export function ProjectSearch({ initial }: { initial: SearchResult[] }) {
       startTransition(async () => {
         const filters: { career?: string; yearFrom?: number; yearTo?: number } = {}
         if (career) filters.career = career
-        if (from !== null && !isNaN(from)) filters.yearFrom = from
-        if (to !== null && !isNaN(to)) filters.yearTo = to
+        if (fromNum !== null) filters.yearFrom = fromNum
+        if (toNum !== null) filters.yearTo = toNum
 
         const res = await searchProjects(query, filters)
         setResults(res)
         setCurrentPage(1)
-        setHasSearched(query.trim().length > 0 || !!career || !!yearFrom || !!yearTo)
+        setHasSearched(query.trim().length > 0 || !!career || fromNum !== null || toNum !== null)
       })
     }, 300)
     return () => clearTimeout(handle)
