@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { Loader2, AlertTriangle, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Download } from "lucide-react";
 
 type Props = {
@@ -10,97 +10,91 @@ type Props = {
 
 export function PdfViewer({ url, title = "PDF" }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const wrapperRef = useRef<HTMLDivElement>(null);
+  const pdfRef = useRef<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [pageCount, setPageCount] = useState(0);
   const [pageNum, setPageNum] = useState(1);
-  const [scale, setScale] = useState(1.0);
-  const pdfDocRef = useRef<any>(null);
+  const [scale, setScale] = useState(1);
+
+  const renderCurrent = useCallback(async () => {
+    const pdf = pdfRef.current;
+    const canvas = canvasRef.current;
+    const wrapper = wrapperRef.current;
+    if (!pdf || !canvas || !wrapper) return;
+
+    try {
+      const page = await pdf.getPage(pageNum);
+      const vp = page.getViewport({ scale });
+      canvas.width = vp.width;
+      canvas.height = vp.height;
+      const ctx = canvas.getContext("2d");
+      if (ctx) {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        await page.render({ canvasContext: ctx, viewport: vp }).promise;
+      }
+    } catch (e) {
+      console.error("Render error:", e);
+    }
+  }, [pageNum, scale]);
 
   useEffect(() => {
-    let cancelled = false;
+    let dead = false;
     setLoading(true);
     setError(null);
     setPageNum(1);
     setPageCount(0);
-    setScale(1.0);
-    pdfDocRef.current = null;
+    setScale(1);
+    pdfRef.current = null;
 
-    async function load() {
+    (async () => {
       try {
-        // Import pdfjs (same pattern as lib/pdf.ts)
         // @ts-ignore
-        const pdfjsLib = await import("pdfjs-dist/build/pdf.mjs");
-        pdfjsLib.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
+        const mod: any = await import("pdfjs-dist/build/pdf.mjs");
+        mod.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
 
-        // Fetch PDF via proxy (que usa Admin SDK, siempre funciona)
         const proxyUrl = `/api/pdf-proxy?url=${encodeURIComponent(url)}`;
         const res = await fetch(proxyUrl);
-        if (!res.ok) throw new Error("No se pudo obtener el PDF");
+        if (!res.ok) throw new Error("Error al obtener PDF");
+        const buf = await res.arrayBuffer();
+        if (dead) return;
 
-        const buffer = await res.arrayBuffer();
-        const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
-        if (cancelled) return;
+        const pdf = await mod.getDocument({ data: buf }).promise;
+        if (dead) return;
 
-        pdfDocRef.current = pdf;
+        pdfRef.current = pdf;
         setPageCount(pdf.numPages);
         setLoading(false);
-        renderPage(pdf, 1, 1.0);
       } catch (err: any) {
-        if (!cancelled) {
-          setError(err?.message || "Error al cargar PDF");
-          setLoading(false);
-        }
+        if (!dead) { setError(err?.message || "Error"); setLoading(false); }
       }
-    }
+    })();
 
-    load();
-    return () => { cancelled = true; };
+    return () => { dead = true; };
   }, [url]);
 
-  async function renderPage(pdf: any, num: number, s: number) {
-    const canvas = canvasRef.current;
-    if (!canvas || !pdf) return;
-    try {
-      const page = await pdf.getPage(num);
-      const viewport = page.getViewport({ scale: s });
-      canvas.width = viewport.width;
-      canvas.height = viewport.height;
+  useEffect(() => {
+    if (!loading && pdfRef.current) renderCurrent();
+  }, [renderCurrent, loading]);
 
-      const ctx = canvas.getContext("2d");
-      if (!ctx) return;
-
-      await page.render({ canvasContext: ctx, viewport }).promise;
-    } catch (err) {
-      console.error("Error rendering page:", err);
-    }
+  function goPage(delta: number) {
+    const n = pageNum + delta;
+    if (n >= 1 && n <= pageCount) setPageNum(n);
   }
 
-  async function changePage(delta: number) {
-    const next = pageNum + delta;
-    if (next < 1 || next > pageCount) return;
-    setPageNum(next);
-    if (pdfDocRef.current) {
-      await renderPage(pdfDocRef.current, next, scale);
-    }
-  }
-
-  async function changeScale(delta: number) {
-    const newScale = Math.max(0.5, Math.min(3, scale + delta));
-    setScale(newScale);
-    if (pdfDocRef.current) {
-      await renderPage(pdfDocRef.current, pageNum, newScale);
-    }
+  function zoom(delta: number) {
+    setScale((s) => Math.max(0.5, Math.min(3, s + delta)));
   }
 
   if (error) {
     return (
-      <div className="flex flex-col items-center justify-center gap-4 p-12 text-muted-foreground">
+      <div className="flex flex-col items-center justify-center h-full gap-4 p-12 text-muted-foreground">
         <AlertTriangle className="size-12" />
         <p className="text-sm text-center">{error}</p>
         <a href={url} target="_blank" rel="noreferrer" download
-          className="bg-primary text-primary-foreground px-5 py-2.5 rounded-xl text-sm font-semibold hover:bg-primary/90 transition-all">
-          Descargar PDF directamente
+          className="bg-primary text-primary-foreground px-5 py-2.5 rounded-xl text-sm font-semibold hover:bg-primary/90">
+          Descargar PDF
         </a>
       </div>
     );
@@ -108,54 +102,41 @@ export function PdfViewer({ url, title = "PDF" }: Props) {
 
   return (
     <div className="flex flex-col h-full">
-      {/* Toolbar */}
-      <div className="flex items-center justify-between px-4 py-2 border-b border-border bg-muted/30 shrink-0">
-        <div className="flex items-center gap-2">
-          <span className="text-sm text-muted-foreground truncate max-w-[300px]">{title}</span>
-        </div>
-        <div className="flex items-center gap-1">
-          <button type="button" onClick={() => changeScale(-0.25)}
-            className="p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
-            title="Alejar" disabled={scale <= 0.5}>
+      {/* Toolbar - con padding extra a la derecha para no tapar el X del Dialog */}
+      <div className="flex items-center justify-between px-4 py-2 pr-14 border-b border-border bg-muted/30 shrink-0">
+        <span className="text-sm text-muted-foreground truncate max-w-[300px]">{title}</span>
+        <div className="flex items-center gap-0.5">
+          <button type="button" onClick={() => zoom(-0.25)} disabled={scale <= 0.5}
+            className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground disabled:opacity-30" title="Alejar">
             <ZoomOut className="size-4" />
           </button>
-          <span className="text-xs text-muted-foreground w-10 text-center">{Math.round(scale * 100)}%</span>
-          <button type="button" onClick={() => changeScale(0.25)}
-            className="p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
-            title="Acercar" disabled={scale >= 3}>
+          <span className="text-xs text-muted-foreground w-10 text-center font-mono">{Math.round(scale * 100)}%</span>
+          <button type="button" onClick={() => zoom(0.25)} disabled={scale >= 3}
+            className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground disabled:opacity-30" title="Acercar">
             <ZoomIn className="size-4" />
           </button>
-
-          <div className="w-px h-5 bg-border mx-1" />
-
-          <button type="button" onClick={() => changePage(-1)}
-            className="p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
-            title="Pagina anterior" disabled={pageNum <= 1}>
+          <div className="w-px h-4 bg-border mx-1" />
+          <button type="button" onClick={() => goPage(-1)} disabled={pageNum <= 1}
+            className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground disabled:opacity-30" title="Anterior">
             <ChevronLeft className="size-4" />
           </button>
-          <span className="text-xs text-muted-foreground">
-            {pageNum} / {pageCount}
-          </span>
-          <button type="button" onClick={() => changePage(1)}
-            className="p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
-            title="Pagina siguiente" disabled={pageNum >= pageCount}>
+          <span className="text-xs text-muted-foreground font-mono">{pageNum}/{pageCount}</span>
+          <button type="button" onClick={() => goPage(1)} disabled={pageNum >= pageCount}
+            className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground disabled:opacity-30" title="Siguiente">
             <ChevronRight className="size-4" />
           </button>
-
-          <div className="w-px h-5 bg-border mx-1" />
-
+          <div className="w-px h-4 bg-border mx-1" />
           <a href={url} target="_blank" rel="noreferrer" download
-            className="p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
-            title="Descargar PDF">
+            className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground" title="Descargar">
             <Download className="size-4" />
           </a>
         </div>
       </div>
 
-      {/* Canvas area */}
-      <div className="flex-1 overflow-auto bg-muted/20 flex justify-center p-4">
+      {/* Scroll area */}
+      <div ref={wrapperRef} className="flex-1 overflow-auto bg-muted/10 flex justify-center p-4">
         {loading ? (
-          <div className="flex items-center justify-center">
+          <div className="flex items-center justify-center h-full">
             <Loader2 className="size-8 animate-spin text-muted-foreground" />
           </div>
         ) : (
