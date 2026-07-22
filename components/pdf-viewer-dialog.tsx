@@ -20,7 +20,7 @@ export function PdfViewerDialog({ url, open, onOpenChange, title = "Visor de PDF
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-[1600px] min-w-180 w-[95vw] h-[90vh] flex flex-col p-0 overflow-hidden gap-0">
+      <DialogContent className="max-w-none w-[90vw] h-[90vh] flex flex-col p-0 overflow-hidden gap-0">
         <DialogHeader className="sr-only">
           <DialogTitle>{title}</DialogTitle>
         </DialogHeader>

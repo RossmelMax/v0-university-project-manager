@@ -1,16 +1,12 @@
 "use client";
 
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Loader2, AlertTriangle, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Download } from "lucide-react";
 
-type Props = {
-  url: string;
-  title?: string;
-};
+type Props = { url: string; title?: string };
 
 export function PdfViewer({ url, title = "PDF" }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const wrapperRef = useRef<HTMLDivElement>(null);
   const pdfRef = useRef<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -18,12 +14,11 @@ export function PdfViewer({ url, title = "PDF" }: Props) {
   const [pageNum, setPageNum] = useState(1);
   const [scale, setScale] = useState(1);
 
-  const renderCurrent = useCallback(async () => {
+  // Renderiza la pagina actual con la escala actual
+  async function render() {
     const pdf = pdfRef.current;
     const canvas = canvasRef.current;
-    const wrapper = wrapperRef.current;
-    if (!pdf || !canvas || !wrapper) return;
-
+    if (!pdf || !canvas) return;
     try {
       const page = await pdf.getPage(pageNum);
       const vp = page.getViewport({ scale });
@@ -37,8 +32,9 @@ export function PdfViewer({ url, title = "PDF" }: Props) {
     } catch (e) {
       console.error("Render error:", e);
     }
-  }, [pageNum, scale]);
+  }
 
+  // Cargar PDF al montar
   useEffect(() => {
     let dead = false;
     setLoading(true);
@@ -67,24 +63,35 @@ export function PdfViewer({ url, title = "PDF" }: Props) {
         setPageCount(pdf.numPages);
         setLoading(false);
       } catch (err: any) {
-        if (!dead) { setError(err?.message || "Error"); setLoading(false); }
+        if (!dead) setError(err?.message || "Error");
+        setLoading(false);
       }
     })();
 
     return () => { dead = true; };
   }, [url]);
 
+  // Render cuando cambia pagina o escala
   useEffect(() => {
-    if (!loading && pdfRef.current) renderCurrent();
-  }, [renderCurrent, loading]);
+    if (!loading && pdfRef.current) render();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pageNum, scale, loading]);
+
+  // Scroll vertical = cambiar pagina
+  function handleWheel(e: React.WheelEvent) {
+    if (e.deltaY > 0 && pageNum < pageCount) {
+      setPageNum(p => Math.min(pageCount, p + 1));
+    } else if (e.deltaY < 0 && pageNum > 1) {
+      setPageNum(p => Math.max(1, p - 1));
+    }
+  }
 
   function goPage(delta: number) {
-    const n = pageNum + delta;
-    if (n >= 1 && n <= pageCount) setPageNum(n);
+    setPageNum(p => Math.max(1, Math.min(pageCount, p + delta)));
   }
 
   function zoom(delta: number) {
-    setScale((s) => Math.max(0.5, Math.min(3, s + delta)));
+    setScale(s => Math.max(0.5, Math.min(3, s + delta)));
   }
 
   if (error) {
@@ -102,7 +109,7 @@ export function PdfViewer({ url, title = "PDF" }: Props) {
 
   return (
     <div className="flex flex-col h-full">
-      {/* Toolbar - con padding extra a la derecha para no tapar el X del Dialog */}
+      {/* Toolbar */}
       <div className="flex items-center justify-between px-4 py-2 pr-14 border-b border-border bg-muted/30 shrink-0">
         <span className="text-sm text-muted-foreground truncate max-w-[300px]">{title}</span>
         <div className="flex items-center gap-0.5">
@@ -117,12 +124,12 @@ export function PdfViewer({ url, title = "PDF" }: Props) {
           </button>
           <div className="w-px h-4 bg-border mx-1" />
           <button type="button" onClick={() => goPage(-1)} disabled={pageNum <= 1}
-            className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground disabled:opacity-30" title="Anterior">
+            className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground disabled:opacity-30" title="Pagina anterior">
             <ChevronLeft className="size-4" />
           </button>
           <span className="text-xs text-muted-foreground font-mono">{pageNum}/{pageCount}</span>
           <button type="button" onClick={() => goPage(1)} disabled={pageNum >= pageCount}
-            className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground disabled:opacity-30" title="Siguiente">
+            className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground disabled:opacity-30" title="Pagina siguiente">
             <ChevronRight className="size-4" />
           </button>
           <div className="w-px h-4 bg-border mx-1" />
@@ -133,14 +140,14 @@ export function PdfViewer({ url, title = "PDF" }: Props) {
         </div>
       </div>
 
-      {/* Scroll area */}
-      <div ref={wrapperRef} className="flex-1 overflow-auto bg-muted/10 flex justify-center p-4">
+      {/* Scroll area + wheel para cambiar pagina */}
+      <div className="flex-1 overflow-auto bg-muted/10 flex justify-center p-4" onWheel={handleWheel}>
         {loading ? (
-          <div className="flex items-center justify-center h-full">
+          <div className="flex items-center justify-center h-full min-h-[400px]">
             <Loader2 className="size-8 animate-spin text-muted-foreground" />
           </div>
         ) : (
-          <canvas ref={canvasRef} className="shadow-xl rounded-lg bg-white" />
+          <canvas ref={canvasRef} className="shadow-xl rounded-lg bg-white" style={{ maxWidth: "100%", height: "auto" }} />
         )}
       </div>
     </div>
