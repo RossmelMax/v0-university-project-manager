@@ -17,3 +17,5 @@ node_modules
 .DS_Store
 .agents/
 logs/
+.vercel
+.env*
