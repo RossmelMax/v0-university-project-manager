@@ -9,14 +9,12 @@ import {
   GraduationCap,
   FileText,
   Download,
-  History,
   Tag,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { PdfViewerDialog } from "@/components/pdf-viewer-dialog";
-import { ProjectHistoryList } from "@/components/project-history";
-import type { ThesisProject, PdfVersion } from "@/lib/projects";
+import type { ThesisProject } from "@/lib/projects";
 
 const CAREER_STYLES: Record<string, string> = {
   "Ingeniería en Sistemas": "bg-chart-1/10 text-chart-1 border-chart-1/20",
@@ -27,10 +25,8 @@ const CAREER_STYLES: Record<string, string> = {
 
 export function ProjectDetail({
   project,
-  pdfHistory,
 }: {
   project: ThesisProject;
-  pdfHistory: PdfVersion[];
 }) {
   const [showPdf, setShowPdf] = useState(false);
 
@@ -153,48 +149,9 @@ export function ProjectDetail({
           )}
         </section>
 
-        {/* Historial de versiones de PDF */}
-        {pdfHistory.length > 0 && (
-          <section className="mb-10">
-            <h2 className="mb-4 flex items-center gap-2 text-xl font-bold text-foreground">
-              <History className="size-5" aria-hidden="true" />
-              Versiones del PDF
-            </h2>
-            <div className="rounded-xl border border-border bg-card divide-y divide-border">
-              {pdfHistory.map((version) => (
-                <div
-                  key={version.id}
-                  className="flex items-center justify-between px-5 py-3"
-                >
-                  <span className="text-sm text-foreground font-medium">
-                    Versión subida el{" "}
-                    {new Date(version.uploadedAt).toLocaleDateString("es-BO", {
-                      year: "numeric",
-                      month: "long",
-                      day: "numeric",
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}
-                  </span>
-                  <a
-                    href={"/api/pdf-proxy?url=" + encodeURIComponent(version.url)}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-sm font-medium text-primary hover:underline flex items-center gap-1"
-                  >
-                    <FileText className="size-3.5" />
-                    Ver versión
-                  </a>
-                </div>
-              ))}
-            </div>
-          </section>
-        )}
-
-        {/* Historial de cambios */}
-        <section className="mb-10">
-          <ProjectHistoryList projectId={project.id} />
-        </section>
+        {/* Historial de versiones de PDF y de cambios:
+            solo visibles en la vista Administrar (admin-projects.tsx),
+            no en la búsqueda pública. */}
       </div>
     </>
   );

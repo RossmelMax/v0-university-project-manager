@@ -1,6 +1,6 @@
 import { notFound, redirect } from "next/navigation";
 import { isLoggedIn } from "@/app/actions/auth";
-import { getProjectById, getPdfHistory } from "@/app/actions/projects";
+import { getProjectById } from "@/app/actions/projects";
 import { SiteHeader } from "@/components/site-header";
 import { ProjectDetail } from "@/components/project-detail";
 
@@ -16,13 +16,11 @@ export default async function ProjectDetailPage({
 
   if (!project) notFound();
 
-  const pdfHistory = await getPdfHistory(id);
-
   return (
     <div className="min-h-svh bg-background flex flex-col">
       <SiteHeader />
       <main className="flex-1 w-full">
-        <ProjectDetail project={project} pdfHistory={pdfHistory} />
+        <ProjectDetail project={project} />
       </main>
       <footer className="border-t border-border py-8 mt-auto bg-muted/30">
         <div className="mx-auto max-w-5xl px-4 text-center text-sm text-muted-foreground flex flex-col gap-2">

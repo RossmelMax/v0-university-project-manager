@@ -87,12 +87,18 @@ function isLikelyTocPage(pageText: string): boolean {
  * Usamos estos para saber dónde termina el bloque del resumen.
  */
 const NEXT_SECTION_MARKERS = [
-  /\b(?:1\.\s*INTRODUCCI[ÓO]N)\b/i,
-  /\b(?:1\.1\.?\s*ANTECEDENTES|1\.1\s*ANTECEDENTES|ANTECEDENTES)\b/i,
-  /\b(?:1\.2\s*(?:PRESENTACI[ÓO]N|ANTECEDENTES)|PRESENTACI[ÓO]N DEL TEMA)\b/i,
-  /\b(?:1\.3\s*PLANTEAMIENTO|PLANTEAMIENTO DEL PROBLEMA)\b/i,
-  /\b(?:2\s*OBJETIVOS|OBJETIVOS)\b/i,
-  /\b(?:CAP[ÍI]TULO\s+(?:I{1,3}|IV|V|VI|1|2))\b/i,
+  // OJO: los marcadores van anclados a números de sección ("1.1 Antecedentes",
+  // "1.2 Presentación", etc.) para NO confundir palabras sueltas dentro del
+  // texto del resumen (ej. "...los antecedentes investigativos..." no debe
+  // cortar el resumen en "antecedentes").
+  /\b\d{1,2}(?:\.\d{1,2})*\.?\s*ANTECEDENTES\b/i,
+  /\b\d{1,2}(?:\.\d{1,2})*\.?\s*PRESENTACI[ÓO]N(?:\s+DEL\s+TEMA(?:\s+Y\s+SU\s+IMPORTANCIA)?)?\b/i,
+  /\b\d{1,2}(?:\.\d{1,2})*\.?\s*PLANTEAMIENTO(?:\s+DEL\s+PROBLEMA)?\b/i,
+  /\b\d{1,2}(?:\.\d{1,2})*\.?\s*FORMULACI[ÓO]N(?:\s+DEL\s+PROBLEMA)?\b/i,
+  /\b\d{1,2}(?:\.\d{1,2})*\.?\s*OBJETIVOS?(?:\s+(?:GENERAL|ESPEC[ÍI]FICOS?))?\b/i,
+  /\b\d{1,2}(?:\.\d{1,2})*\.?\s*JUSTIFICACI[ÓO]N\b/i,
+  /\b\d{1,2}(?:\.\d{1,2})*\.?\s*ALCANCE(?:\s+Y\s+LIMITACIONES)?\b/i,
+  /\bCAP[ÍI]TULO\s+(?:I{1,3}|IV|V|VI|1|2)\b/i,
   /\b(?:PALABRAS\s+CLAVE|KEYWORDS)\b/i,
 ];
 
@@ -283,7 +289,10 @@ export async function extractPdfData(file: File): Promise<PdfExtraction> {
   if (!studentName) studentName = extractStudentFallback(textForAnalysis);
   if (!career) career = inferCareer(fullText);
   if (!year) year = extractYear(fullText);
-  if (keywords.length === 0) keywords = extractKeywords(abstract);
+  // Tags: extraer del título + resumen combinados (no solo del resumen)
+  if (keywords.length === 0) {
+    keywords = extractKeywords([title, abstract].filter(Boolean).join(" "));
+  }
 
   return {
     title,

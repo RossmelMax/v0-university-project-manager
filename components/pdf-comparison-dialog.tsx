@@ -9,7 +9,7 @@ type Props = {
         title: string
         studentName: string
         career: string
-        year: number
+        year: number | ""
         abstract: string
         tags?: string
     }

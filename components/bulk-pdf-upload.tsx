@@ -65,6 +65,7 @@ export function BulkPdfUpload({ onSuccess }: { onSuccess?: () => void }) {
         year: parseInt(metadata.year, 10) || new Date().getFullYear(),
         abstract: metadata.abstract,
         pdfUrl,
+        tags: metadata.keywords ?? [],
       });
       if (!result.ok) throw new Error(result.error || "Error al crear el proyecto");
 

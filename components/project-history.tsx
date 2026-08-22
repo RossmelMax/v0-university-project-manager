@@ -66,7 +66,6 @@ export function ProjectHistoryList({ projectId }: { projectId: string }) {
     },
     PDF_UPLOAD: {
       icon: FileUp,
-  RefreshCw,
       color: "text-purple-500",
       bg: "bg-purple-500/10",
     },

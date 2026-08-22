@@ -19,8 +19,6 @@ import { PdfUpload } from "@/components/pdf-upload";
 import { PdfComparisonDialog } from "@/components/pdf-comparison-dialog";
 import { CheckCircle2, AlertCircle, Plus, PencilLine, Tag } from "lucide-react";
 
-const CURRENT_YEAR = new Date().getFullYear();
-
 type ProjectFormProps = {
   mode?: "create" | "edit";
   project?: SearchResult | null;
@@ -49,7 +47,7 @@ export function ProjectForm({
   const [title, setTitle] = useState("");
   const [studentName, setStudentName] = useState("");
   const [career, setCareer] = useState("");
-  const [year, setYear] = useState(CURRENT_YEAR);
+  const [year, setYear] = useState<number | "">("");
   const [abstract, setAbstract] = useState("");
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [tags, setTags] = useState("");
@@ -81,7 +79,7 @@ export function ProjectForm({
       setTitle("");
       setStudentName("");
       setCareer("");
-      setYear(CURRENT_YEAR);
+      setYear("");
       setAbstract("");
       setPdfUrl(null);
       setTags("");
@@ -146,8 +144,13 @@ export function ProjectForm({
       return;
     }
 
+    if (year === "" || !Number.isInteger(year) || year < 1980 || year > 2100) {
+      setFeedback({ type: "error", text: "El año no es válido." });
+      return;
+    }
+
     startTransition(async () => {
-      const payload = { title, studentName, career, year, abstract, pdfUrl, tags: tags.split(",").map((t) => t.trim()).filter(Boolean) };
+      const payload = { title, studentName, career, year: year as number, abstract, pdfUrl, tags: tags.split(",").map((t) => t.trim()).filter(Boolean) };
 
       // Aseguramos que si es modo edit, el ID se pase como string explícitamente
       const res =
@@ -167,9 +170,10 @@ export function ProjectForm({
           setTitle("");
           setStudentName("");
           setCareer("");
-          setYear(CURRENT_YEAR);
+          setYear("");
           setAbstract("");
           setPdfUrl(null);
+          setTags("");
         }
         router.refresh();
         onSuccess?.(destinationTab);
@@ -206,6 +210,7 @@ export function ProjectForm({
           onUploadComplete={setPdfUrl}
           existingPdfUrl={pdfUrl}
           onLoadingChange={setPdfLoading}
+          projectId={project?.id ?? null}
         />
 
         <div className="flex flex-col gap-2">
@@ -260,7 +265,7 @@ export function ProjectForm({
               min={1980}
               max={2100}
               value={year}
-              onChange={(event) => setYear(Number(event.target.value))}
+              onChange={(event) => setYear(event.target.value === "" ? "" : Number(event.target.value))}
               className="h-12 text-base"
             />
           </div>

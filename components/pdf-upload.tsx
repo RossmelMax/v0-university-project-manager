@@ -20,6 +20,7 @@ type Props = {
   onUploadComplete: (url: string) => void;
   existingPdfUrl?: string | null;
   onLoadingChange?: (loading: boolean) => void;
+  projectId?: string | null;
 };
 
 export function PdfUpload({
@@ -27,6 +28,7 @@ export function PdfUpload({
   onUploadComplete,
   existingPdfUrl = null,
   onLoadingChange,
+  projectId = null,
 }: Props) {
   const [isLoading, setIsLoading] = useState(false);
 
@@ -43,6 +45,9 @@ export function PdfUpload({
     try {
       const formData = new FormData();
       formData.append("pdf", file);
+      if (projectId) {
+        formData.append("projectId", projectId);
+      }
 
       const uploadResponse = await fetch("/api/upload-pdf", {
         method: "POST",
