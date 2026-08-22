@@ -1,5 +1,22 @@
 import { NextResponse } from "next/server";
 
+function safeJsonParse(content: string): Record<string, unknown> {
+  if (!content) return {};
+  try {
+    return JSON.parse(content);
+  } catch {
+    const match = content.match(/\{[\s\S]*\}/);
+    if (match) {
+      try {
+        return JSON.parse(match[0]);
+      } catch {
+        return {};
+      }
+    }
+    return {};
+  }
+}
+
 export async function POST(request: Request) {
   try {
     const { text } = await request.json();
@@ -17,30 +34,31 @@ export async function POST(request: Request) {
       );
     }
 
-    // Prompt optimizado para tesis de grado bolivianas (formato UDABOL)
+    // Prompt optimizado para tesis de grado bolivianas (formato UDABOL).
+    // El resumen/abstract NO se extrae aquí: se calcula de forma determinista
+    // en lib/pdf.ts (extractAbstractContent) para manejar bien el caso de
+    // documentos sin introducción (sección vacía).
     const prompt = `Eres un asistente experto en documentos académicos de universidades bolivianas, específicamente tesis y proyectos de grado de la Universidad de Aquino Bolivia (UDABOL).
 
-A continuación se presenta el texto extraído (posiblemente con errores de OCR) de un proyecto de grado o tesis boliviana. Los documentos suelen tener este formato:
-- "CARRERA DE INGENIERÍA EN SISTEMAS" (o Telecomunicaciones, o Petrolera)
+A continuación se presenta el texto extraído de un proyecto de grado o tesis. Los documentos suelen tener este formato:
+- "CARRERA DE INGENIERÍA DE SISTEMAS" (o Telecomunicaciones, o Petrolera)
 - "POSTULANTE: Nombre Completo" o "AUTOR: Nombre Completo"
-- "EXAMEN DE GRADO" o "PROYECTO DE GRADO" o "TESIS DE GRADO"
+- "EXAMEN DE GRADO", "PROYECTO DE GRADO" o "TESIS DE GRADO"
 - Título del proyecto en mayúsculas después de la carrera
-- Sección "RESUMEN" o "RESUMEN EJECUTIVO" o "ABSTRACT" con el resumen
-- Fechas típicas: "Cochabamba - Bolivia", "Gestión 2024"
+- Fechas: "Cochabamba - Bolivia", "Gestión 2024", un año de 4 dígitos
 
-Tu objetivo es extraer los siguientes datos y devolverlos ESTRICTAMENTE en formato JSON, sin texto adicional ni markdown. Corrige cualquier error tipográfico del OCR.
+Tu objetivo es extraer los siguientes datos y devolverlos ESTRICTAMENTE en formato JSON, sin texto adicional ni markdown. Corrige errores tipográficos del OCR.
 
 Campos a extraer:
-- title: El título completo del proyecto de grado (string). Normalmente aparece en mayúsculas después de la carrera. Ej: "SISTEMA DE GESTIÓN ACADÉMICA PARA LA UNIVERSIDAD DE AQUINO BOLIVIA"
-- studentName: El nombre completo del postulante o autor (string). Busca después de palabras como "POSTULANTE:", "AUTOR:", "ALUMNO:", "POR:".
+- title: El título completo del proyecto de grado (string). Aparece en mayúsculas después de la carrera, antes de "EXAMEN DE GRADO" / "PROYECTO DE GRADO" / "TESIS DE GRADO". Ej: "SISTEMA DE GESTIÓN ACADÉMICA PARA LA UNIVERSIDAD DE AQUINO BOLIVIA".
+- studentName: El nombre completo del postulante o autor (string). Busca después de "POSTULANTE:", "AUTOR:", "ALUMNO:", "POR:". Devuelve el nombre en formato normal (sin mayúsculas sostenidas). Ej: "Oriana Madeleine Castro Vallejo".
 - career: La carrera (string). Debe ser exactamente una de: "Ingeniería en Sistemas", "Ingeniería en Telecomunicaciones", "Ingeniería Petrolera", o string vacío si no se identifica claramente.
-- year: El año del documento (string, 4 dígitos). Busca en fechas como "Gestión 2024", "Cochabamba, 2023", o cualquier año cercano al texto.
-- abstract: El texto completo del resumen (string). Extrae SOLO el contenido bajo "RESUMEN", "RESUMEN EJECUTIVO" o "ABSTRACT". NO incluyas el título de la sección ni el índice/tabla de contenidos. Si el texto contiene índices o numeración mezclada con el resumen, sepáralos e incluye solo el párrafo del resumen. Devuelve string vacío si no encuentras un resumen claro.
-- keywords: Un array de strings con 5 a 10 palabras clave relevantes del proyecto (tecnologías, metodologías, temas principales). Ej: ["machine learning", "base de datos", "monitoreo remoto", "dashboard web"]. Si no hay resumen para extraerlas, devuelve un array vacío [].
+- year: El año del documento (string, 4 dígitos). Busca en la portada: "Gestión 2024", "Cochabamba - Bolivia", o el año junto al lugar. Si hay varios, prioriza el de la portada.
+- keywords: Un array de strings con 5 a 10 palabras clave relevantes del proyecto (tecnologías, metodologías, temas principales). Extrae del título y del resumen/introducción si existen. Ej: ["machine learning", "procesamiento de lenguaje natural", "sistema de recomendación", "base de datos"]. Si no puedes determinarlas con confianza, devuelve un array vacío [].
 
 Texto del documento:
 """
-${text.substring(0, 15000)}
+${text.substring(0, 6000)}
 """`;
 
     const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
@@ -50,7 +68,7 @@ ${text.substring(0, 15000)}
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "llama3-8b-8192",
+        model: "openai/gpt-oss-20b",
         messages: [{ role: "user", content: prompt }],
         temperature: 0.1,
         response_format: { type: "json_object" },
@@ -65,15 +83,14 @@ ${text.substring(0, 15000)}
 
     const data = await res.json();
     const content = data.choices?.[0]?.message?.content;
-    const parsed = JSON.parse(content || "{}");
+    const parsed = safeJsonParse(content || "{}");
 
     return NextResponse.json({
       title: parsed.title || "",
       studentName: parsed.studentName || "",
       career: parsed.career || "",
       year: parsed.year || "",
-      abstract: parsed.abstract || "",
-      keywords: parsed.keywords || [],
+      keywords: Array.isArray(parsed.keywords) ? parsed.keywords : [],
     });
   } catch (error) {
     console.error("Error in extract-pdf-data:", error);
