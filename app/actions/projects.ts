@@ -12,31 +12,6 @@ import {
 import { adminDb } from "@/lib/firebase/admin";
 import { getUserRole } from "@/app/actions/auth";
 
-const FALLBACK_PROJECTS: ThesisProject[] = [
-  {
-    id: "fallback-1",
-    title: "Sistema de gestión de inventarios para laboratorios",
-    studentName: "María Fernanda Quiroga",
-    career: "Ingeniería en Sistemas",
-    year: 2024,
-    abstract:
-      "Plataforma para gestionar insumos, solicitudes y reportes de laboratorio con flujo de aprobación.",
-    pdfUrl: null,
-    createdAt: new Date("2024-01-15T00:00:00.000Z").toISOString(),
-  },
-  {
-    id: "fallback-2",
-    title: "Monitoreo remoto de equipos petroleros",
-    studentName: "Carlos Alvarez",
-    career: "Ingeniería Petrolera",
-    year: 2023,
-    abstract:
-      "Sistema de monitoreo y alertas para equipos de producción usando sensores y dashboard web.",
-    pdfUrl: null,
-    createdAt: new Date("2023-08-20T00:00:00.000Z").toISOString(),
-  },
-];
-
 async function ensureAdmin() {
   const role = await getUserRole();
   return role === "admin";
@@ -80,7 +55,7 @@ export async function getProjects(includeDeleted: boolean = false): Promise<Thes
     return projects;
   } catch (err) {
     console.error("Error obteniendo proyectos de Firestore:", err);
-    return FALLBACK_PROJECTS as ThesisProject[];
+    return [];
   }
 }
 
@@ -128,7 +103,7 @@ export async function getProjectsPaginated(
     return { items: filtered, hasMore };
   } catch (err) {
     console.error("Error obteniendo proyectos paginados:", err);
-    return { items: FALLBACK_PROJECTS as ThesisProject[], hasMore: false };
+    return { items: [], hasMore: false };
   }
 }
 

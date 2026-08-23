@@ -56,10 +56,23 @@ export function extractKeywords(text: string): string[] {
 }
 
 function inferCareer(text: string) {
+  // 1) Buscar el patrón explícito "CARRERA DE <nombre>" (más fiable que
+  //    buscar palabras sueltas como "sistemas", que aparecen en el texto
+  //    de cualquier proyecto — ej. "...sistemas de control SCADA...").
+  const careerMatch = text.match(
+    /CARRERA\s+DE\s+(INGENIER[IÍ]A\s+(?:DE\s+)?SISTEMAS|INGENIER[IÍ]A\s+EN\s+TELECOMUNICACIONES|INGENIER[IÍ]A\s+PETROLERA)/i,
+  );
+  if (careerMatch) {
+    const c = careerMatch[1].toLowerCase();
+    if (c.includes("telecom")) return "Ingeniería en Telecomunicaciones";
+    if (c.includes("petrol")) return "Ingeniería Petrolera";
+    return "Ingeniería en Sistemas";
+  }
+  // 2) Fallback por palabra clave (petrol/telecom primero; "sistemas" es genérica)
   const lower = text.toLowerCase();
-  if (lower.includes("sistemas")) return "Ingeniería en Sistemas";
-  if (lower.includes("telecom")) return "Ingeniería en Telecomunicaciones";
   if (lower.includes("petrol")) return "Ingeniería Petrolera";
+  if (lower.includes("telecom")) return "Ingeniería en Telecomunicaciones";
+  if (lower.includes("sistemas")) return "Ingeniería en Sistemas";
   return "";
 }
 

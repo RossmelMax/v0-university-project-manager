@@ -13,7 +13,6 @@ export const metadata: Metadata = {
   title: 'Repositorio de Proyectos de Grado | UDABOL',
   description:
     'Plataforma para registrar y buscar proyectos de grado de la Universidad de Aquino Bolivia (UDABOL).',
-  generator: 'v0.app',
   icons: {
     icon: [
       {
