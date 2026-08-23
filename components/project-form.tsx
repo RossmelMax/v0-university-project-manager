@@ -344,7 +344,7 @@ export function ProjectForm({
           />
           <p className="text-xs text-muted-foreground">
             Ingresa palabras clave separadas por coma. Se extraerán
-            automáticamente del resumen si se deja vacío.
+            automáticamente del título y el resumen si se deja vacío.
           </p>
         </div>
 
