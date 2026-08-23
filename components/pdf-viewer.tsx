@@ -1,17 +1,49 @@
 "use client";
 
-import { Download, ExternalLink } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Download, ExternalLink, Loader2, AlertTriangle } from "lucide-react";
 
 type Props = { url: string; title?: string };
 
 /**
- * Visor de PDF: usa un <iframe> con el visor nativo del navegador
- * (Chrome y Firefox) a través del proxy interno (/api/pdf-proxy), que
- * sirve el PDF con Content-Disposition: inline. Esto da scroll continuo,
- * zoom y búsqueda nativos, mucho mejor que el render canvas de pdfjs-dist.
+ * Visor de PDF cross-browser: descarga el PDF como blob vía el proxy
+ * interno (/api/pdf-proxy) y lo muestra en un <iframe> con un blob URL.
+ * Así el visor nativo del navegador (Chrome y Firefox) renderiza el PDF
+ * inline con scroll, zoom y búsqueda, sin depender de los headers del
+ * servidor (Content-Disposition, X-Frame-Options) que hacían que Chrome
+ * no mostrara nada o que Firefox lo descargara.
  */
 export function PdfViewer({ url, title = "PDF" }: Props) {
   const proxyUrl = "/api/pdf-proxy?url=" + encodeURIComponent(url);
+  const [blobUrl, setBlobUrl] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let objectUrl: string | null = null;
+    let cancelled = false;
+    setBlobUrl(null);
+    setError(null);
+
+    (async () => {
+      try {
+        const res = await fetch(proxyUrl);
+        if (!res.ok) throw new Error("No se pudo cargar el PDF");
+        const blob = await res.blob();
+        if (cancelled) return;
+        objectUrl = URL.createObjectURL(blob);
+        setBlobUrl(objectUrl);
+      } catch (e: any) {
+        if (!cancelled) {
+          setError(e?.message || "No se pudo cargar el PDF");
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [proxyUrl]);
 
   return (
     <div className="flex h-full w-full flex-col bg-muted">
@@ -39,12 +71,33 @@ export function PdfViewer({ url, title = "PDF" }: Props) {
           </a>
         </div>
       </div>
-      <iframe
-        src={proxyUrl}
-        title={title}
-        className="w-full flex-1"
-        style={{ border: "none" }}
-      />
+
+      {blobUrl ? (
+        <iframe
+          src={blobUrl}
+          title={title}
+          className="w-full flex-1"
+          style={{ border: "none" }}
+        />
+      ) : error ? (
+        <div className="flex flex-1 flex-col items-center justify-center gap-3 p-6 text-center">
+          <AlertTriangle className="size-8 text-destructive" />
+          <p className="text-sm text-muted-foreground">{error}</p>
+          <a
+            href={proxyUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="text-sm font-medium text-primary hover:underline"
+          >
+            Abrir en una pestaña nueva
+          </a>
+        </div>
+      ) : (
+        <div className="flex flex-1 items-center justify-center gap-2 p-6 text-sm text-muted-foreground">
+          <Loader2 className="size-5 animate-spin" />
+          Cargando PDF…
+        </div>
+      )}
     </div>
   );
 }
