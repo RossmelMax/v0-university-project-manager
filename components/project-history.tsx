@@ -1,10 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { getProjectHistory } from "@/app/actions/projects";
-import type { ProjectHistoryLog } from "@/lib/projects";
-import { format } from "date-fns";
-import { es } from "date-fns/locale";
+import type { ProjectHistoryLog, PdfVersion } from "@/lib/projects";
 import {
   Activity,
   PlusCircle,
@@ -15,7 +13,52 @@ import {
   Loader2,
 } from "lucide-react";
 
-export function ProjectHistoryList({ projectId }: { projectId: string }) {
+type Props = {
+  projectId: string;
+  pdfVersions?: PdfVersion[];
+  onViewVersion?: (url: string) => void;
+};
+
+// Formato de fecha/hora consistente (12h con a. m./p. m.)
+function formatTime(iso: string): string {
+  return new Date(iso).toLocaleString("es-BO", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+const actionStyles = {
+  CREATE: {
+    icon: PlusCircle,
+    color: "text-green-500",
+    bg: "bg-green-500/10",
+  },
+  UPDATE: { icon: Pencil, color: "text-blue-500", bg: "bg-blue-500/10" },
+  RESTORE: {
+    icon: RefreshCw,
+    color: "text-amber-500",
+    bg: "bg-amber-500/10",
+  },
+  DELETE: {
+    icon: Trash2,
+    color: "text-destructive",
+    bg: "bg-destructive/10",
+  },
+  PDF_UPLOAD: {
+    icon: FileUp,
+    color: "text-purple-500",
+    bg: "bg-purple-500/10",
+  },
+};
+
+type TimelineItem =
+  | { type: "log"; time: string; data: ProjectHistoryLog }
+  | { type: "pdf"; time: string; data: PdfVersion };
+
+export function ProjectHistoryList({ projectId, pdfVersions = [], onViewVersion }: Props) {
   const [logs, setLogs] = useState<ProjectHistoryLog[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -30,6 +73,18 @@ export function ProjectHistoryList({ projectId }: { projectId: string }) {
     if (projectId) fetchHistory();
   }, [projectId]);
 
+  // Fusiona los registros de cambios con las versiones de PDF en un solo
+  // timeline ordenado por fecha, para que cada PDF aparezca en su momento.
+  const timeline = useMemo<TimelineItem[]>(() => {
+    const items: TimelineItem[] = [
+      ...logs.map((l) => ({ type: "log" as const, time: l.timestamp, data: l })),
+      ...pdfVersions.map((v) => ({ type: "pdf" as const, time: v.uploadedAt, data: v })),
+    ];
+    return items.sort(
+      (a, b) => new Date(b.time).getTime() - new Date(a.time).getTime(),
+    );
+  }, [logs, pdfVersions]);
+
   if (loading) {
     return (
       <div className="flex justify-center p-8 text-muted-foreground">
@@ -38,38 +93,13 @@ export function ProjectHistoryList({ projectId }: { projectId: string }) {
     );
   }
 
-  if (logs.length === 0) {
+  if (timeline.length === 0) {
     return (
       <div className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
         No hay registros en el historial para este proyecto.
       </div>
     );
   }
-
-  // Diccionario para iconos y colores según la acción
-  const actionStyles = {
-    CREATE: {
-      icon: PlusCircle,
-      color: "text-green-500",
-      bg: "bg-green-500/10",
-    },
-    UPDATE: { icon: Pencil, color: "text-blue-500", bg: "bg-blue-500/10" },
-    RESTORE: {
-      icon: RefreshCw,
-      color: "text-amber-500",
-      bg: "bg-amber-500/10",
-    },
-    DELETE: {
-      icon: Trash2,
-      color: "text-destructive",
-      bg: "bg-destructive/10",
-    },
-    PDF_UPLOAD: {
-      icon: FileUp,
-      color: "text-purple-500",
-      bg: "bg-purple-500/10",
-    },
-  };
 
   return (
     <div className="space-y-6">
@@ -79,7 +109,45 @@ export function ProjectHistoryList({ projectId }: { projectId: string }) {
       </h3>
 
       <div className="relative space-y-4 before:absolute before:inset-y-0 before:left-4.75 before:w-px before:bg-border">
-        {logs.map((log) => {
+        {timeline.map((item) => {
+          if (item.type === "pdf") {
+            const v = item.data;
+            return (
+              <div key={`pdf-${v.id}`} className="relative flex items-start gap-4">
+                <div className="relative z-10 flex size-10 shrink-0 items-center justify-center rounded-full border border-background bg-purple-500/10 text-purple-500">
+                  <FileUp className="size-4" />
+                </div>
+                <div className="flex flex-col gap-1 pt-1.5">
+                  <p className="text-sm font-medium text-foreground">
+                    Versión de PDF
+                  </p>
+                  <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                    <span>{formatTime(v.uploadedAt)}</span>
+                    <span>•</span>
+                    {onViewVersion && (
+                      <button
+                        type="button"
+                        onClick={() => onViewVersion(v.url)}
+                        className="font-medium text-primary hover:underline"
+                      >
+                        Ver
+                      </button>
+                    )}
+                    <a
+                      href={"/api/pdf-proxy?url=" + encodeURIComponent(v.url)}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="font-medium text-primary hover:underline"
+                    >
+                      Descargar
+                    </a>
+                  </div>
+                </div>
+              </div>
+            );
+          }
+
+          const log = item.data;
           const Style = actionStyles[log.action] || {
             icon: Activity,
             color: "text-muted-foreground",
@@ -88,10 +156,7 @@ export function ProjectHistoryList({ projectId }: { projectId: string }) {
           const Icon = Style.icon;
 
           return (
-            <div
-              key={log.id}
-              className="relative flex items-start gap-4"
-            >
+            <div key={log.id} className="relative flex items-start gap-4">
               <div
                 className={`relative z-10 flex size-10 shrink-0 items-center justify-center rounded-full border border-background ${Style.bg} ${Style.color}`}
               >
@@ -99,15 +164,9 @@ export function ProjectHistoryList({ projectId }: { projectId: string }) {
               </div>
 
               <div className="flex flex-col gap-1 pt-1.5">
-                <p className="text-sm font-medium text-foreground">
-                  {log.details}
-                </p>
+                <p className="text-sm font-medium text-foreground">{log.details}</p>
                 <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                  <span>
-                    {format(new Date(log.timestamp), "dd MMM yyyy, HH:mm", {
-                      locale: es,
-                    })}
-                  </span>
+                  <span>{formatTime(log.timestamp)}</span>
                   <span>•</span>
                   <span className="capitalize">Por: {log.userRole}</span>
                 </div>

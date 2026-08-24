@@ -277,54 +277,13 @@ export function AdminProjects({ projects, onDelete, onEdit }: Props) {
             </div>
           )}
 
-          {/* PDF Version History */}
-          {pdfHistory.length > 0 && (
-            <section className="mt-6">
-              <h3 className="mb-3 flex items-center gap-2 text-base font-semibold text-foreground">
-                <History className="size-4" aria-hidden="true" />
-                Versiones del PDF
-              </h3>
-              <div className="rounded-lg border border-border divide-y divide-border">
-                {pdfHistory.map((version) => (
-                  <div
-                    key={version.id}
-                    className="flex items-center justify-between px-4 py-2.5"
-                  >
-                    <span className="text-sm text-foreground">
-                      Versión subida el{" "}
-                      {new Date(version.uploadedAt).toLocaleDateString("es-BO", {
-                        year: "numeric",
-                        month: "long",
-                        day: "numeric",
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
-                    </span>
-                    <div className="flex items-center gap-2 shrink-0">
-                    <button
-                      type="button"
-                      onClick={() => setViewVersionUrl(version.url)}
-                      className="text-sm font-medium text-primary hover:underline flex items-center gap-1 cursor-pointer"
-                    >
-                      <FileText className="size-3.5" />
-                      Ver PDF
-                    </button>
-                    <a
-                      href={"/api/pdf-proxy?url=" + encodeURIComponent(version.url)}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-xs text-muted-foreground hover:text-foreground underline"
-                    >
-                      Descargar
-                    </a>
-                  </div>
-                  </div>
-                ))}
-              </div>
-            </section>
+          {historyProject && (
+            <ProjectHistoryList
+              projectId={historyProject.id}
+              pdfVersions={pdfHistory}
+              onViewVersion={(url) => setViewVersionUrl(url)}
+            />
           )}
-
-          {historyProject && <ProjectHistoryList projectId={historyProject.id} />}
         </DialogContent>
       </Dialog>
 
