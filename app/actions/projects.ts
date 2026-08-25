@@ -545,6 +545,17 @@ function tokenize(text: string): string[] {
   return normalize(text).split(/\s+/).filter(Boolean);
 }
 
+// Stopwords (es + en) para no matchear palabras vacías como "de", "el",
+// "la", "que", etc. en la búsqueda por tokens.
+const STOPWORDS = new Set([
+  "de", "del", "el", "la", "los", "las", "un", "una", "unos", "unas",
+  "en", "con", "por", "para", "que", "y", "e", "o", "u", "a", "al",
+  "es", "son", "se", "su", "sus", "lo", "le", "como", "mas", "más",
+  "este", "esta", "estos", "estas", "entre", "cada", "todo", "todos",
+  "sobre", "sin", "ha", "han", "ser", "tiene", "tienen", "fue", "fueron",
+  "the", "of", "and", "in", "to", "a", "is", "for", "with", "on", "an",
+]);
+
 export async function searchProjects(
   query: string,
   filters?: {
@@ -604,7 +615,7 @@ export async function searchProjects(
       // 4. Coincidencia por tokens individuales (permite búsqueda parcial)
       let tokenMatches = 0;
       for (const token of queryTokens) {
-        if (token.length < 2) continue; // ignora tokens muy cortos
+        if (token.length < 2 || STOPWORDS.has(token)) continue; // ignora tokens cortos/stopwords
 
         // Palabras completas
         const tokenRegex = new RegExp(`\\b${token.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
@@ -620,9 +631,10 @@ export async function searchProjects(
       }
       score += tokenMatches;
 
-      // 5. Fuzzy match Levenshtein para palabras de 4+ caracteres
-      // Solo como bonus si hubo poca coincidencia directa
-      if (score < 10) {
+      // 5. Fuzzy match Levenshtein: SOLO como bonus de ranking para proyectos
+      //    que YA coinciden (nunca como motivo de inclusión). Así evitamos
+      //    falsos positivos tipo "campo" ≈ "como" en proyectos irrelevantes.
+      if (score > 0) {
         for (const token of queryTokens) {
           if (token.length < 4) continue;
           const projectTokens = tokenize(allText);
@@ -631,9 +643,9 @@ export async function searchProjects(
             const dist = levenshtein(token, pt);
             const maxLen = Math.max(token.length, pt.length);
             if (dist <= 1) {
-              score += 15; // match casi exacto (1 transposición/error)
-            } else if (dist <= Math.ceil(maxLen * 0.25)) {
-              score += 8; // match aproximado
+              score += 10; // 1 error de tipeo
+            } else if (dist === 2 && maxLen >= 7) {
+              score += 4; // 2 errores solo en palabras largas
             }
           }
         }
