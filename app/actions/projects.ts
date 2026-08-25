@@ -639,10 +639,6 @@ export async function searchProjects(
         }
       }
 
-      // 6. Bonus por año reciente (proyectos más nuevos primero)
-      const yearBonus = Math.max(0, (project.year - 2018) * 0.5);
-      score += yearBonus;
-
       return { ...project, score };
     })
     .filter((project) => project.score > 0)
