@@ -16,7 +16,7 @@ import {
 import { Search, Loader2, SearchX, X, ArrowUpDown } from "lucide-react"
 import { PaginationControls } from "@/components/pagination-controls"
 
-type SortKey = "title" | "year" | "career" | "studentName"
+type SortKey = "title" | "year" | "career" | "studentName" | "createdAt"
 type SortDir = "asc" | "desc"
 
 export function ProjectSearch({ initial }: { initial: SearchResult[] }) {
@@ -74,7 +74,7 @@ export function ProjectSearch({ initial }: { initial: SearchResult[] }) {
   // Ordenamiento
   function toggleSort(key: SortKey) {
     if (sortKey === key) setSortDir((d) => (d === "asc" ? "desc" : "asc"))
-    else { setSortKey(key); setSortDir("asc") }
+    else { setSortKey(key); setSortDir(key === "createdAt" ? "desc" : "asc") }
   }
 
   const sortedResults = useMemo(() => {
@@ -155,7 +155,7 @@ export function ProjectSearch({ initial }: { initial: SearchResult[] }) {
 
       {/* Sorters */}
       <div className="flex gap-1 text-xs">
-        {(["title", "year", "career", "studentName"] as const).map((key) => (
+        {(["title", "year", "career", "studentName", "createdAt"] as const).map((key) => (
           <button
             key={key}
             type="button"
@@ -166,7 +166,7 @@ export function ProjectSearch({ initial }: { initial: SearchResult[] }) {
                 : "text-muted-foreground hover:text-foreground hover:bg-muted"
             }`}
           >
-            {key === "title" ? "Título" : key === "year" ? "Año" : key === "career" ? "Carrera" : "Alumno"}
+            {key === "title" ? "Título" : key === "year" ? "Año" : key === "career" ? "Carrera" : key === "studentName" ? "Alumno" : "Fecha de subida"}
             {sortKey === key && <ArrowUpDown className="size-3" />}
           </button>
         ))}

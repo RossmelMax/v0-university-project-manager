@@ -28,7 +28,15 @@ export function HomeTabs({
   initial: SearchResult[];
   role: "anonymous" | "admin";
 }) {
-  const [tab, setTab] = useState<Tab>("buscar");
+  const [tab, setTabState] = useState<Tab>(() => {
+    if (typeof window === "undefined") return "buscar";
+    return (sessionStorage.getItem("sgpg-tab") as Tab) || "buscar";
+  });
+
+  function setTab(next: Tab) {
+    setTabState(next);
+    try { sessionStorage.setItem("sgpg-tab", next); } catch {}
+  }
   const [projects, setProjects] = useState(initial);
   const [editingProject, setEditingProject] = useState<SearchResult | null>(null);
 

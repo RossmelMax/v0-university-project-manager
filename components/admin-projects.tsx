@@ -24,7 +24,7 @@ import { ProjectHistoryList } from "@/components/project-history"
 import { PdfViewerDialog } from "@/components/pdf-viewer-dialog";
 import { getPdfHistory } from "@/app/actions/projects";
 
-type SortKey = "title" | "year" | "career" | "studentName";
+type SortKey = "title" | "year" | "career" | "studentName" | "createdAt";
 type SortDir = "asc" | "desc";
 
 type Props = {
@@ -94,7 +94,7 @@ export function AdminProjects({ projects, onDelete, onEdit }: Props) {
 
   function toggleSort(key: SortKey) {
     if (sortKey === key) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
-    else { setSortKey(key); setSortDir("asc"); }
+    else { setSortKey(key); setSortDir(key === "createdAt" ? "desc" : "asc"); }
   }
 
   function clearFilters() {
@@ -149,7 +149,7 @@ export function AdminProjects({ projects, onDelete, onEdit }: Props) {
           />
         </div>
         <div className="flex gap-1 text-xs">
-          {(["title", "year", "career", "studentName"] as const).map((key) => (
+          {(["title", "year", "career", "studentName", "createdAt"] as const).map((key) => (
             <button
               key={key}
               type="button"
@@ -160,7 +160,7 @@ export function AdminProjects({ projects, onDelete, onEdit }: Props) {
                   : "text-muted-foreground hover:text-foreground hover:bg-muted"
               }`}
             >
-              {key === "title" ? "Título" : key === "year" ? "Año" : key === "career" ? "Carrera" : "Alumno"}
+              {key === "title" ? "Título" : key === "year" ? "Año" : key === "career" ? "Carrera" : key === "studentName" ? "Alumno" : "Fecha de subida"}
               {sortKey === key && <ArrowUpDown className="size-3" />}
             </button>
           ))}
